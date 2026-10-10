@@ -2,12 +2,12 @@
 """
 AceCloud Web Manager v2
 ========================
-acecloud_gui.py ke SAME features, browser me.
-Original scripts (acecloud_spot.py / spot_server.py / dashboard.py) sirf IMPORT
-ho rahe hain - unme ek bhi line change nahi hoti.
+Same features as acecloud_gui.py, but in the browser.
+Original scripts (acecloud_spot.py / spot_server.py / dashboard.py) are only
+IMPORTED - not a single line in them is changed.
 
 Run:    python app.py           -> http://127.0.0.1:8787
-PIN:    terminal me print hota hai (ya ACEWEB_PIN env set karo)
+PIN:    printed in the terminal (or set the ACEWEB_PIN env var)
 """
 import base64
 import json
@@ -34,7 +34,7 @@ from deploy_core import (load_plans, save_plan, plan_timer, fetch_ondemand_price
 
 HOST = os.environ.get("ACEWEB_HOST", "0.0.0.0")
 PORT = int(os.environ.get("ACEWEB_PORT") or os.environ.get("PORT") or "8787")
-PIN = os.environ.get("ACEWEB_PIN", "") or "3315"  # default PIN (env se override ho sakta hai)
+PIN = os.environ.get("ACEWEB_PIN", "") or "3315"  # default PIN (can be overridden via env)
 
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
         ".js": "application/javascript; charset=utf-8", ".ico": "image/x-icon"}
@@ -78,7 +78,7 @@ def end():
     BUSY_LK.release()
 
 
-# ============================== helpers (GUI jaisa hi) ==============================
+# ============================== helpers (same as GUI) ==============================
 def classify(inst):
     name = (inst.get("name") or "").lower()
     bill = str(inst.get("billing_type") or "").lower()
@@ -217,7 +217,7 @@ def job_create_win(region, base, size_idx, count, hours, billing):
                     source = "snapshot"
                     break
         if not image_id:
-            raise ValueError("Base select nahi hua")
+            raise ValueError("Base not selected")
         pending = {}
         for n in range(count):
             iid, iname = sw.create_win_spot(
@@ -232,7 +232,7 @@ def job_create_win(region, base, size_idx, count, hours, billing):
                 push(f"Create fail: {iname}", "error")
             time.sleep(2)
         if not pending:
-            push("Kuch nahi bana.", "error")
+            push("Nothing was created.", "error")
             return
         save_plan(list(pending.keys()), hours)
         creds = load_creds()
@@ -325,7 +325,7 @@ def job_create_proxy(code, size_idx, count, hours, port, user, pwd, billing_lbl)
                 push(f"NOT ACTIVE: {iname}", "error")
             time.sleep(2)
         if not ready:
-            push("Koi proxy ACTIVE nahi hui.", "error")
+            push("No proxy became ACTIVE.", "error")
             return
         save_plan([it["name"] for it in ready], hours)
         for it in ready:
@@ -344,7 +344,7 @@ def job_create_proxy(code, size_idx, count, hours, port, user, pwd, billing_lbl)
 
 
 def schedule_timer(hours, kind):
-    push(f"Auto-delete scheduled: {hours}h (server chalta rehna chahiye)", "warn")
+    push(f"Auto-delete scheduled: {hours}h (server must keep running)", "warn")
 
     def worker():
         time.sleep(int(float(hours) * 3600))
@@ -398,9 +398,9 @@ def job_snapshot(region, name, snap_name):
         sid = sw.take_snapshot(region, name, snap_name, f"Manual snapshot of {name}")
         if sid:
             push(f"SNAPSHOT CREATED: {snap_name} | {sid}", "ok")
-            push("~Rs 0.34/hr (~Rs 250/month). Create me Base='SNAP:' chuno.", "info")
+            push("~Rs 0.34/hr (~Rs 250/month). In Create, choose Base='SNAP:'.", "info")
         else:
-            push("Snapshot nahi bani.", "error")
+            push("Snapshot was not created.", "error")
     except BaseException as e:
         push(f"SNAPSHOT ERROR: {e}", "error")
     finally:
@@ -504,7 +504,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True, "pin": bool(PIN)})
             return
 
-        # static files - no PIN (UI ko load hone do, data API pe protected hai)
+        # static files - no PIN (let the UI load; data API is protected)
         if path == "/":
             self._send((WEB_DIR / "static" / "index.html").read_bytes(), MIME[".html"])
             return
@@ -586,10 +586,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/create":
             if not STATE["logged"]:
-                self._json({"ok": False, "msg": "Login nahi hua"}, 400)
+                self._json({"ok": False, "msg": "Not logged in"}, 400)
                 return
             if not begin():
-                self._json({"ok": False, "msg": "Pehla kaam khatam hone do..."}, 409)
+                self._json({"ok": False, "msg": "Wait for the current task to finish..."}, 409)
                 return
             t = b.get("type", "Windows Spot")
             if t == "Linux Proxy":
@@ -658,8 +658,8 @@ def main():
     print("\n" + "=" * 58)
     print("  AceCloud Web Manager v2")
     print(f"  LOCAL :  http://127.0.0.1:{PORT}")
-    print(f"  PIN   :  {PIN}   (browser/phone pe pehli baar poochega)")
-    print("  Public URL chahiye? tunnel.bat chalao (free Cloudflare)")
+    print(f"  PIN   :  {PIN}   (asked once per browser/phone)")
+    print("  Need a public URL? Run tunnel.bat (free Cloudflare)")
     print("=" * 58 + "\n")
     push(f"PIN: {PIN}", "sys")
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

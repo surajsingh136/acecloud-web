@@ -79,7 +79,7 @@ REGIONS = {
     },
 }
 
-# 5 proxy sizes (lowest -> highest billing). Flavor ids/rates per region live-fetch hote hain.
+# 5 proxy sizes (lowest -> highest billing). Flavor ids/rates per region are live-fetched.
 LINUX_SIZES_NAMES = ["C4a.medium", "C4a.large", "C4a.xlarge", "C4a.2xlarge", "C4a.4xlarge"]
 LINUX_FLAVOR_FALLBACK = {
     "ap-south-mum-2": {
@@ -136,7 +136,7 @@ def login(email, password):
     r3 = SESSION.get(f"{WEB_BASE}/v1/api/auth/session", timeout=20)
     AUTH_TOKEN = r3.json().get("user", {}).get("accessToken", "")
     if not AUTH_TOKEN:
-        log("accessToken nahi mila", "error")
+        log("accessToken not found", "error")
         sys.exit(1)
     log(f"Login OK: {email}", "ok")
 
@@ -194,7 +194,7 @@ def get_spot_price(size_name="C4a.medium"):
             if price:
                 return float(price)
     fb = (LINUX_SPOT_FALLBACK.get(REGION) or {}).get(size_name, 0.8996)
-    log(f"Spot price nahi mila {size_name}, defaulting to {fb}", "warn")
+    log(f"Spot price not found: {size_name}, defaulting to {fb}", "warn")
     return fb
 
 
@@ -220,20 +220,20 @@ def _qty(v):
 def show_quota():
     q = get_quota()
     if not q:
-        print("  (QUOTA: live fetch nahi hua)")
+        print("  (QUOTA: live fetch failed)")
         return
     (iu, il), (cu, cl), (ru, rl) = q
     free = None if il is None else max(0, il - iu)
     print(f"  QUOTA (live): instances {iu}/{_qty(il)} | cores {cu}/{_qty(cl)} | RAM {ru}GB/{_qty(rl)}GB")
     if free is not None:
         if free == 0:
-            print("  !! INSTANCE QUOTA KHATAM - pehle koi instance DELETE karo ya quota badhwao !!")
+            print("  !! INSTANCE QUOTA FULL - delete an instance first or request a quota increase !!")
         else:
-            print(f"  -> baqi free: {free} instance(s) bana sakte ho")
+            print(f"  -> remaining free: {free} instance(s) you can create")
 
 
 def build_linux_sizes(region):
-    """Live-fetch flavors -> 5 sizes (name, id, vcpu, ram). Static fallback agar fetch fail ho."""
+    """Live-fetch flavors -> 5 sizes (name, id, vcpu, ram). Static fallback if fetch fails."""
     sizes = []
     try:
         flavs = api_data("GET", "cloud/flavors", params={"region": region, "limit": "500"}) or []
@@ -592,7 +592,7 @@ def nuke_all(delete_gpo=True, regions=None):
     """Delete only LINUX proxy instances + squid/proxy SGs + local proxy file (Windows spot untouched)."""
     regions = regions or list(REGIONS)
     log("=" * 50)
-    log("NUKE (LINUX PROXY ONLY) - SAB DELETE (ZERO BILL)", "error")
+    log("NUKE (LINUX PROXY ONLY) - DELETE ALL (ZERO BILL)", "error")
     log("=" * 50)
     for region in regions:
         log(f"-- Region: {region} ({REGIONS[region]['label']}) --", "ok")
@@ -689,9 +689,9 @@ def main():
     global REGION, FLAVOR_ID, IMAGE_ID, EXT_NET_ID, KEY_NAME
     login(email, password)
 
-    # Delete mode: region choose karo, phir cleanup
+    # Delete mode: choose region, then cleanup
     if args.delete:
-        print("\n  Kis region ke proxies delete karne hain?")
+        print("\n  Which region's proxies should be deleted?")
         print("    1) Mumbai only")
         print("    2) Noida only")
         print("    3) Both regions (default)")
@@ -746,7 +746,7 @@ def main():
     count = args.count
     if count <= 0:
         try:
-            count = int(input("\n  Kitni spot proxy banani hai? [1]: ").strip() or "1")
+            count = int(input("\n  How many spot proxies to create? [1]: ").strip() or "1")
         except Exception:
             count = 1
         if count < 1:
@@ -756,7 +756,7 @@ def main():
     run_hours = args.hours
     if run_hours <= 0:
         try:
-            run_hours = int(input("\n  Kitne hour ke liye chalao aur phir auto-delete? [1]: ").strip() or "1")
+            run_hours = int(input("\n  Hours to run before auto-delete? [1]: ").strip() or "1")
         except Exception:
             run_hours = 1
         if run_hours < 1:
@@ -789,7 +789,7 @@ def main():
         sys.exit(1)
     log(f"Submitted {len(pending)}/{count} instances. Waiting for ACTIVE...", "ok")
 
-    # ============ PHASE 2: sab instances ACTIVE hone ka MULTI-THREADED wait ============
+    # ============ PHASE 2: MULTI-THREADED wait for all instances to go ACTIVE ============
     import threading
 
     def wait_active(iid, max_wait=600):
@@ -808,8 +808,8 @@ def main():
             time.sleep(8)
         return None
 
-    # har instance apne thread me wait karega (sab ikatthe = single IP ke barabar time)
-    # lekin API polling ko limit rakho (max 8 concurrent) taaki rate-limit na lage
+    # each instance waits in its own thread (all together = time of a single instance)
+    # but limit API polling (max 8 concurrent) so we don't hit the rate limit
     results_lock = threading.Lock()
     poll_sem = threading.Semaphore(8)
     ready = []
@@ -830,11 +830,11 @@ def main():
         threads.append(t)
         t.start()
 
-    # sab threads ke khatam hone ka wait (bina timeout ki tension)
+    # wait for all threads to finish (no timeout worries)
     for t in threads:
         t.join()
 
-    # results ikatthe karo - jo ACTIVE + IP mile wahi ready
+    # collect the results - only those ACTIVE + with an IP are ready
     for name, res in active_results.items():
         if res["inst"] is not None and res["ip"]:
             ready.append({"name": name, "id": res["id"], "ip": res["ip"]})
@@ -843,11 +843,11 @@ def main():
             log(f"ERROR/TIMEOUT: {name}", "error")
 
     if not ready:
-        log("Koi instance ACTIVE nahi hua.", "error")
+        log("No instance became ACTIVE.", "error")
         sys.exit(1)
     log(f"{len(ready)}/{count} instances are ACTIVE and have IPs.", "ok")
 
-    # ============ PHASE 3: Squid verify MULTI-THREADED (sab ikatthe) ============
+    # ============ PHASE 3: Squid verify MULTI-THREADED (all together) ============
     auth = base64.b64encode(f"{PROXY_USER}:{PROXY_PASS}".encode()).decode()
     req_tpl = (f"GET http://api.ipify.org/ HTTP/1.1\r\n"
                f"Host: api.ipify.org\r\n"
@@ -900,7 +900,7 @@ def main():
             verified.append(it)
             log(f"Squid OK: {it['ip']}:{args.port} (200)", "ok")
         else:
-            log(f"WARNING: Squid nahi mila: {it['ip']} - verify manually", "warn")
+            log(f"WARNING: Squid not found: {it['ip']} - verify manually", "warn")
 
     # ============ PHASE 4: SSH REPAIR (never miss - keypair-based) ============
     failed = [it for it in ready if not verify_results.get(it["name"])]
@@ -960,7 +960,7 @@ def main():
 
     # Start auto-delete timer (in background) -> ZERO BILL guarantee
     schedule_auto_delete(run_hours, email, password)
-    log("Jab tak hum hain, koi extra bill nahi. Summary above.", "ok")
+    log("No extra bill while we're running. Summary above.", "ok")
 
 
 if __name__ == "__main__":

@@ -3,12 +3,12 @@
 AceCloud SPOT WINDOWS SERVER Launcher (Windows/Linux - Pure Python)
 =================================================================
 Creates SPOT Windows Server 2022/2025 instances (billing_type=spot) with
-selectable size (1-5, sabse low se jyada billing ke hisab se).
+selectable size (1-5, ordered from lowest to highest billing).
 RDP login: Administrator / Rr@123456
 Format in spot_server.txt: ip:3389:Administrator:Rr@123456
 
-BEST-EFFORT startup script password set karti hai. Agar kaam na kare:
-  -> Website Console -> RDP connect -> Administrator login -> password change karo.
+BEST-EFFORT: the startup script sets the password. If it doesn't work:
+  -> Website Console -> RDP connect -> Administrator login -> change the password.
 
 Usage:
     python spot_server.py --email E --password P
@@ -58,9 +58,9 @@ WIN_PASS = "Rr@123456"
 WINRM_PORT = 5985
 
 # Once per script-run auto password (proven production flow):
-# - password userdata (#ps1) se set hota hai Windows first boot par
-# - script WinRM(5985) se connect karke password VERIFY + finalize karta hai
-# - sirf ~1-2 min me ready (ACTIVE ke baad)
+# - password is set from userdata (#ps1) on Windows first boot
+# - the script connects via WinRM(5985) to VERIFY + finalize the password
+# - ready in just ~1-2 min (after ACTIVE)
 def gen_password(length=12):
     chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%"
     while True:
@@ -71,7 +71,7 @@ def gen_password(length=12):
 
 
 def build_user_data(pw):
-    """#ps1 script -> base64. Windows images ke saath proven (raw test se confirm)."""
+    """#ps1 script -> base64. Proven with Windows images (confirmed by raw test)."""
     ps1 = (
         "#ps1\r\n"
         "net user Administrator '{pw}'\r\n"
@@ -108,7 +108,7 @@ SIZES = [
      "id": "54eb9e21-3fa7-4b46-b18e-1631b225f7ef"},
 ]
 
-# Windows region assets (Mumbai = default, Noida = verified). Flavor ids/rates live-fetch karte hain.
+# Windows region assets (Mumbai = default, Noida = verified). Flavor ids/rates are live-fetched.
 WREGIONS = {
     "ap-south-mum-2": {
         "label": "Mumbai",
@@ -155,7 +155,7 @@ def login(email, password):
     r3 = SESSION.get(f"{WEB_BASE}/v1/api/auth/session", timeout=20)
     AUTH_TOKEN = r3.json().get("user", {}).get("accessToken", "")
     if not AUTH_TOKEN:
-        log("accessToken nahi mila", "error")
+        log("accessToken not found", "error")
         sys.exit(1)
     log(f"Login OK: {email}", "ok")
 
@@ -237,16 +237,16 @@ def show_quota():
     """Print live quota line with free slots."""
     q = get_quota()
     if not q:
-        print("  (QUOTA: live fetch nahi hua)")
+        print("  (QUOTA: live fetch failed)")
         return False
     (iu, il), (cu, cl), (ru, rl) = q
     free = None if il is None else max(0, il - iu)
     print(f"  QUOTA (live): instances {iu}/{_qty(il)} | cores {cu}/{_qty(cl)} | RAM {ru}GB/{_qty(rl)}GB")
     if free is not None:
         if free == 0:
-            print("  !! INSTANCE QUOTA KHATAM - pehle koi instance DELETE karo ya quota badhwao !!")
+            print("  !! INSTANCE QUOTA FULL - delete an instance first or request a quota increase !!")
         else:
-            print(f"  -> baqi free: {free} instance(s) bana sakte ho")
+            print(f"  -> remaining free: {free} instance(s) you can create")
     return True
 
 
@@ -353,7 +353,7 @@ def find_boot_volume(region, inst_name):
 def take_snapshot(region, inst_name, snap_name, desc=""):
     vol_id, vol_name = find_boot_volume(region, inst_name)
     if not vol_id:
-        log(f"{inst_name}: boot volume nahi mila", "error")
+        log(f"{inst_name}: boot volume not found", "error")
         return ""
     log(f"  Boot volume: {vol_name} ({vol_id})", "ok")
     body = {"name": snap_name, "volume_id": vol_id}
@@ -367,7 +367,7 @@ def take_snapshot(region, inst_name, snap_name, desc=""):
 
 
 def snapshot_mode():
-    log("=== MANUAL SNAPSHOT (kisi bhi running instance ka) ===", "ok")
+    log("=== MANUAL SNAPSHOT (of any running instance) ===", "ok")
     choice = []
     for region in WREGIONS:
         insts = api_data("GET", "cloud/instances", params={"region": region}) or []
@@ -375,9 +375,9 @@ def snapshot_mode():
             if x.get("status") in ("ACTIVE", "SHUTOFF", "STOPPED"):
                 choice.append((region, x.get("name", ""), x.get("id", "")))
     if not choice:
-        log("Koi instance nahi mila (ACTIVE/SHUTOFF).", "error")
+        log("No instance found (ACTIVE/SHUTOFF).", "error")
         return
-    print("\n  Instances (kisi ka bhi snapshot le sakte ho):")
+    print("\n  Instances (you can snapshot any of them):")
     for i, (rg, nm, iid) in enumerate(choice, 1):
         print(f"    {i}) [{WREGIONS[rg]['label']}] {nm}")
     try:
@@ -397,9 +397,9 @@ def snapshot_mode():
     sid = take_snapshot(region, inst_name, sname, f"Manual snapshot of {inst_name}")
     if sid:
         log(f"SNAPSHOT CREATED (permanent): {sname} | {sid}", "ok")
-        print("  ~Rs 0.34/hr (~Rs 250/month) storage. Isi se baad me server bana sakte ho.")
+        print("  ~Rs 0.34/hr (~Rs 250/month) storage. You can create a server from it later.")
     else:
-        log("Snapshot nahi bani.", "error")
+        log("Snapshot was not created.", "error")
 
 
 def get_public_ip(instance):
@@ -472,7 +472,7 @@ Write-Host "GPO REMOVED!"
 def nuke_all(delete_gpo=True):
     """Delete only WINDOWS spot instances (spot-win-*) + spot-win SGs + local server file -> ZERO BILL. Linux proxies untouched."""
     log("=" * 50)
-    log("NUKE (WINDOWS SPOT ONLY) - SAB DELETE (ZERO BILL)", "error")
+    log("NUKE (WINDOWS SPOT ONLY) - DELETE ALL (ZERO BILL)", "error")
     log("=" * 50)
     insts = api_data("GET", "cloud/instances")
     for inst in (insts or []):
@@ -516,7 +516,7 @@ def nuke_all(delete_gpo=True):
         if sgs:
             time.sleep(8)
     if sgs:
-        log(f"  {len(sgs)} SG(s) delete me help chahiye - web console se delete kar do", "warn")
+        log(f"  {len(sgs)} SG(s) need help deleting - remove them from the web console", "warn")
 
     pf = os.path.join(SAVE_DIR, PROXY_FILE)
     try:
@@ -536,7 +536,7 @@ def nuke_all(delete_gpo=True):
 def schedule_auto_delete(run_hours, email, password):
     """Detached background process -> auto-delete works even if window is closed."""
     seconds = int(float(run_hours) * 3600)
-    log(f"Auto-delete scheduler (background): {run_hours} hour(s) - window band karo, phir bhi chalega", "warn")
+    log(f"Auto-delete scheduler (background): {run_hours} hour(s) - close the window, it still runs", "warn")
     args = [sys.executable, os.path.abspath(__file__),
             "--scheduler", "--auto-delete-after", str(seconds),
             "--email", email, "--password", password]
@@ -569,7 +569,7 @@ def main():
     parser.add_argument("--os", default="", help="2022 or 2025 (default 2022)")
     parser.add_argument("--size", type=int, default=0, help="1-5 (default 1)")
     parser.add_argument("--snapshot", action="store_true",
-                        help="Manual snapshot lo kisi bhi running instance ka")
+                        help="Take a manual snapshot of any running instance")
     parser.add_argument("--scheduler", action="store_true", help="(internal) background auto-delete worker")
     parser.add_argument("--auto-delete-after", type=int, default=0,
                         help="(internal) seconds to wait before nuke")
@@ -609,7 +609,7 @@ def main():
     # Region selection (default = Mumbai)
     global REGION
     rsel = ""
-    print("\n  Select REGION (kahan banani hai):")
+    print("\n  Select REGION (where to create):")
     rcodes = list(WREGIONS.keys())
     for i, rc in enumerate(rcodes, 1):
         print("    %d) %s (%s)" % (i, WREGIONS[rc]["label"], rc))
@@ -621,13 +621,13 @@ def main():
     log(f"Region: {REGION} ({WREGIONS[REGION]['label']})", "ok")
     build_region(REGION)
 
-    # Base selection: public Windows image VS meri snapshot
+    # Base selection: public Windows image VS my snapshot
     boot_source = "image"
     base_snap = False
     os_key = "SNAP"
-    print("\n  Base kya chahiye:")
+    print("\n  Choose base:")
     print("    1) Public Windows image (2022/2025)")
-    print("    2) Meri saved snapshot (win-base-snap etc.)")
+    print("    2) My saved snapshot (win-base-snap etc.)")
     try:
         bsel = input("\n  Select base [1, ENTER = public image]: ").strip()
     except Exception:
@@ -635,9 +635,9 @@ def main():
     if bsel == "2":
         snaps = list_my_snapshots()
         if not snaps:
-            log("Koi snapshot nahi mili. Pehle `--snapshot` se banao ya public image use karo.", "warn")
+            log("No snapshot found. Create one first with `--snapshot` or use a public image.", "warn")
         else:
-            print("\n  Meri snapshots (permanent saved):")
+            print("\n  My snapshots (permanently saved):")
             for i, sn in enumerate(snaps, 1):
                 print(f"    {i}) {sn.get('name')} ({sn.get('size')}GB, {sn.get('status')}, id {sn.get('id')})")
             try:
@@ -686,7 +686,7 @@ def main():
     count = args.count
     if count <= 0:
         try:
-            count = int(input("\n  Kitni Windows servers banani hain? [1]: ").strip() or "1")
+            count = int(input("\n  How many Windows servers to create? [1]: ").strip() or "1")
         except Exception:
             count = 1
         if count < 1:
@@ -695,13 +695,13 @@ def main():
     if q:
         (iu, il), _c, _r = q
         if il is not None and iu + count > il:
-            log(f"QUOTA shortage! in_use {iu}, limit {il}. {count} aur nahi banenge.", "error")
+            log(f"QUOTA shortage! in_use {iu}, limit {il}. Cannot create {count} more.", "error")
     log(f"Count: {count}", "ok")
 
     run_hours = args.hours
     if run_hours <= 0:
         try:
-            run_hours = int(input("\n  Kitne hour ke liye chalao aur phir auto-delete? [1]: ").strip() or "1")
+            run_hours = int(input("\n  Hours to run before auto-delete? [1]: ").strip() or "1")
         except Exception:
             run_hours = 1
         if run_hours < 1:
@@ -784,7 +784,7 @@ def main():
                 if verified:
                     log(f"  {name}: password VERIFIED via WinRM in {verify_secs}s", "ok")
                 else:
-                    log(f"  {name}: WinRM verify timeout ({verify_secs}s) - console se check karo", "warn")
+                    log(f"  {name}: WinRM verify timeout ({verify_secs}s) - check via console", "warn")
         with results_lock:
             active_results[name] = {"id": iid, "inst": inst, "ip": ip, "console": console,
                                     "verified": verified, "verify_secs": verify_secs}
@@ -810,7 +810,7 @@ def main():
             log(f"ERROR/TIMEOUT: {name}", "error")
 
     if not ready:
-        log("Koi instance ACTIVE nahi hua.", "error")
+        log("No instance became ACTIVE.", "error")
         sys.exit(1)
     log(f"{len(ready)}/{count} servers ACTIVE.", "ok")
 
@@ -839,12 +839,12 @@ def main():
     with open(filepath, "w") as f:  # fresh file per launch batch
         for it in ready:
             f.write(f"{it['ip']}:{RDP_PORT}:{WIN_ADMIN}:{it['pass']}\n")
-            f.write(f"verified: {'YES - WinRM password confirmed' if it['verified'] else 'NO - console se check karo'}\n")
+            f.write(f"verified: {'YES - WinRM password confirmed' if it['verified'] else 'NO - check via console'}\n")
             if it.get("console"):
                 f.write(f"console: {it['console']}\n")
     log(f"Saved RDP details to {filepath}", "ok")
 
-    # Extra file: sirf IPs (ek per line) - koi aur changes nahi
+    # Extra file: IPs only (one per line) - no other changes
     ips_path = os.path.join(SAVE_DIR, "spot_server_ips.txt")
     with open(ips_path, "w") as f:
         for it in ready:
@@ -868,13 +868,13 @@ def main():
     print(f"  Saved  : {os.path.join(SAVE_DIR, PROXY_FILE)}")
     print(f"  Auto   : delete after {run_hours} hour(s)")
     print()
-    print("  LOGIN (CONSOLE -> RDP connect): Administrator / upar wala auto password")
-    print("  Note: Password auto-set via startup script + WinRM verify ho gaya hai.")
+    print("  LOGIN (CONSOLE -> RDP connect): Administrator / the auto password above")
+    print("  Note: Password was auto-set via the startup script + verified through WinRM.")
     print("=" * 60)
     print()
 
     schedule_auto_delete(run_hours, email, password)
-    log("ZERO BILL guarantee active - window band karo, timer background me chalega.", "ok")
+    log("ZERO BILL guarantee active - close the window, the timer keeps running in the background.", "ok")
 
     n_console = sum(1 for it in ready if it.get("console"))
     if n_console:
@@ -883,7 +883,7 @@ def main():
             url = it.get("console", "")
             if url:
                 try:
-                    webbrowser.open(url, new=2)  # naye tab me
+                    webbrowser.open(url, new=2)  # in a new tab
                     time.sleep(1.5)
                 except Exception as e:
                     log(f"Browser open error: {e}", "warn")

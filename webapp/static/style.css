@@ -80,7 +80,7 @@ td.st { font-weight: bold; }
 /* toast */
 .toast { position: fixed; bottom: 44px; right: 16px; background: var(--navy); color: #fff; padding: 10px 16px; border-radius: 4px; font-weight: bold; display: none; z-index: 60; }
 
-/* small screens (phone se access kar rahe ho to) */
+/* small screens (when accessing from a phone) */
 @media (max-width: 640px) {
   .row label { min-width: 60px; }
   #banner .sub { display: none; }

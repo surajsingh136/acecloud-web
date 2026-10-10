@@ -2,7 +2,7 @@
   AceCloud Web Manager - FREE DEPLOY (Render.com, NO CARD)
 ========================================================
 
-Folder structure (ye poora folder = ek repo):
+Folder structure (this whole folder = one repo):
   WEB ACC/
     spot/acecloud_spot.py
     spot/server/spot_server.py
@@ -17,12 +17,12 @@ Folder structure (ye poora folder = ek repo):
     .env.example
 
 --------------------------------------------------------
-STEP 1 - GitHub par repo banao
+STEP 1 - Create a repo on GitHub
 --------------------------------------------------------
-1. https://github.com  ->  free account banao (card nahi chahiye).
-2. New repository -> naam: acecloud-web  (README add MAT karo).
-3. Is folder me terminal kholo (folder ke address bar me: cmd)  aur ye chalao
-   (username apna daalo):
+1. https://github.com  ->  create a free account (no card needed).
+2. New repository -> name: acecloud-web  (do NOT add a README).
+3. Open a terminal in this folder (in the folder's address bar type: cmd)
+   and run these (use your own username):
 
    git init
    git add -A
@@ -32,29 +32,29 @@ STEP 1 - GitHub par repo banao
    git push -u origin main
 
 --------------------------------------------------------
-STEP 2 - Render.com par deploy
+STEP 2 - Deploy on Render.com
 --------------------------------------------------------
 1. https://render.com  ->  "Get Started"  ->  "Sign up with GitHub".  (NO CARD)
-2. Dashboard -> New + -> Blueprint -> repo "acecloud-web" chuno -> Apply.
-3. Environment variables maango to ye daalo:
-      ACEWEB_PIN      = apna 4-6 digit pin (jaise 4821)
-      ACECLOUD_EMAIL  = tumhara acecloud email
-      ACECLOUD_PASSWD = tumhara acecloud password
-4. Deploy hone do. Live URL milega:
+2. Dashboard -> New + -> Blueprint -> select the "acecloud-web" repo -> Apply.
+3. When it asks for environment variables, enter these:
+      ACEWEB_PIN      = your 4-6 digit pin (e.g. 4821)
+      ACECLOUD_EMAIL  = your acecloud email
+      ACECLOUD_PASSWD = your acecloud password
+4. Let it deploy. You'll get a live URL:
       https://acecloud-web.onrender.com
 
 --------------------------------------------------------
-ZAROORI BAATEIN
+IMPORTANT NOTES
 --------------------------------------------------------
-- Render FREE 15 min traffic na aane par sleep karta hai.
-  Pehla load 30-50 sec leta hai, phir normal. Access kabhi bhi milega.
-- Pin STRONG rakho, warna URL jaan-ne wala paid VM bana/delete kar dega.
-- Email/password sirf Render ke Environment variables me daalo,
-  code me / GitHub me kabhi nahi.
+- Render FREE sleeps after 15 min of no traffic.
+  The first load takes 30-50 sec, then it is normal. You can access it anytime.
+- Keep the PIN STRONG, otherwise anyone who knows the URL can create/delete paid VMs.
+- Put the email/password only in Render's Environment variables,
+  never in the code / GitHub.
 
 --------------------------------------------------------
 ALTERNATIVE (no-card)
 --------------------------------------------------------
-- Koyeb  : GitHub se deploy, free instance (1 ghante idle pe sleep).
-- Fly.io : CARD MANDATORY - is folder ke Dockerfile se chalta hai
-           (card ho to: fly launch --no-deploy ; fly deploy).
+- Koyeb  : deploy from GitHub, free instance (sleeps after 1 hour idle).
+- Fly.io : CARD MANDATORY - works with this folder's Dockerfile
+           (if you have a card: fly launch --no-deploy ; fly deploy).
