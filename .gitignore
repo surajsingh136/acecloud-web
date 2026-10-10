@@ -1,0 +1,20 @@
+# secrets - NEVER commit
+spot/spot_creds.json
+spot/proxy_spot.txt
+spot/server/spot_server.txt
+**/spot_creds.json
+**/proxy_spot.txt
+**/spot_server.txt
+**/spot_server_ips.txt
+**/*_ips.txt
+.env
+
+# binaries / runtime / local
+*.exe
+webapp/PIN.txt
+webapp/PUBLIC_URL.txt
+webapp/tunnel_out.log
+**/__pycache__/
+*.pyc
+.venv/
+venv/

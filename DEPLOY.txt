@@ -1,0 +1,60 @@
+========================================================
+  AceCloud Web Manager - FREE DEPLOY (Render.com, NO CARD)
+========================================================
+
+Folder structure (ye poora folder = ek repo):
+  WEB ACC/
+    spot/acecloud_spot.py
+    spot/server/spot_server.py
+    spot/instance_plans.json
+    webapp/app.py
+    webapp/deploy_core.py
+    webapp/static/*
+    requirements.txt
+    Dockerfile
+    render.yaml
+    .gitignore
+    .env.example
+
+--------------------------------------------------------
+STEP 1 - GitHub par repo banao
+--------------------------------------------------------
+1. https://github.com  ->  free account banao (card nahi chahiye).
+2. New repository -> naam: acecloud-web  (README add MAT karo).
+3. Is folder me terminal kholo (folder ke address bar me: cmd)  aur ye chalao
+   (username apna daalo):
+
+   git init
+   git add -A
+   git commit -m "deploy"
+   git remote add origin https://github.com/<USERNAME>/acecloud-web.git
+   git branch -M main
+   git push -u origin main
+
+--------------------------------------------------------
+STEP 2 - Render.com par deploy
+--------------------------------------------------------
+1. https://render.com  ->  "Get Started"  ->  "Sign up with GitHub".  (NO CARD)
+2. Dashboard -> New + -> Blueprint -> repo "acecloud-web" chuno -> Apply.
+3. Environment variables maango to ye daalo:
+      ACEWEB_PIN      = apna 4-6 digit pin (jaise 4821)
+      ACECLOUD_EMAIL  = tumhara acecloud email
+      ACECLOUD_PASSWD = tumhara acecloud password
+4. Deploy hone do. Live URL milega:
+      https://acecloud-web.onrender.com
+
+--------------------------------------------------------
+ZAROORI BAATEIN
+--------------------------------------------------------
+- Render FREE 15 min traffic na aane par sleep karta hai.
+  Pehla load 30-50 sec leta hai, phir normal. Access kabhi bhi milega.
+- Pin STRONG rakho, warna URL jaan-ne wala paid VM bana/delete kar dega.
+- Email/password sirf Render ke Environment variables me daalo,
+  code me / GitHub me kabhi nahi.
+
+--------------------------------------------------------
+ALTERNATIVE (no-card)
+--------------------------------------------------------
+- Koyeb  : GitHub se deploy, free instance (1 ghante idle pe sleep).
+- Fly.io : CARD MANDATORY - is folder ke Dockerfile se chalta hai
+           (card ho to: fly launch --no-deploy ; fly deploy).

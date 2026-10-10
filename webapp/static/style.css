@@ -1,0 +1,88 @@
+/* AceCloud theme (HOSTZOP style - same as GUI) */
+:root {
+  --navy: #0B4672;
+  --orange: #E74E37;
+  --soft: #F4F7FA;
+  --white: #fff;
+  --txt: #444;
+  --line: #BFD0DE;
+  --navy-dark: #082F52;
+  --orange-hover: #F05A43;
+  --blue-hover: #124E7E;
+  --green: #15803d;
+  --red: #dc2626;
+  --amber: #b45309;
+}
+* { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
+body { margin: 0; background: var(--soft); color: var(--txt); font-size: 14px; }
+
+/* banner */
+#banner { background: var(--navy); color: #fff; padding: 12px 16px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
+#banner b { font-size: 19px; letter-spacing: .5px; }
+#banner .sub { margin-left: auto; color: var(--orange); font-size: 12px; font-weight: bold; }
+#banner .conn { font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px; background: var(--amber); margin-left: 12px; }
+#banner .conn.on { background: var(--green); }
+
+/* controls */
+.ctrl { padding: 10px 12px 2px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 8px; }
+.row label { font-weight: bold; color: var(--navy); min-width: 70px; }
+select, input[type=text], input[type=number], input[type=password] { padding: 5px 7px; border: 1px solid var(--line); border-radius: 3px; background: #fff; font-size: 13px; }
+select:focus, input:focus { outline: none; border-color: var(--orange); }
+
+/* buttons */
+button { padding: 7px 14px; border: 1px solid var(--navy); background: #fff; color: var(--navy); border-radius: 3px; font-weight: bold; cursor: pointer; font-size: 13px; }
+button:hover { background: var(--soft); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.create { background: var(--orange); border-color: var(--orange); color: #fff; }
+button.create:hover { background: var(--orange-hover); }
+button.del { background: var(--navy); color: #fff; }
+button.del:hover { background: var(--blue-hover); }
+
+/* stats + table */
+#stats { padding: 4px 12px; font-weight: bold; color: var(--navy); }
+#tblwrap { margin: 0 12px; overflow: auto; max-height: 340px; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
+table { border-collapse: collapse; width: 100%; }
+th { background: var(--navy); color: #fff; padding: 7px 8px; text-align: left; font-size: 12px; position: sticky; top: 0; }
+td { padding: 6px 8px; border-bottom: 1px solid #eef3f8; font-size: 13px; }
+tr:nth-child(even) td { background: #EEF3F8; }
+tr.sel td { background: #d6e6f5 !important; }
+tr:hover td { cursor: pointer; }
+td.st { font-weight: bold; }
+.SPOT { color: var(--navy); font-weight: bold; }
+.ON-DEMAND { color: #0B7285; }
+.PROXY { color: var(--orange); }
+.ACTIVE { color: var(--green); }
+.ERROR, .SUSPENDED, .STOPPED { color: var(--red); }
+.BUILD, .REBOOT, .HARD_REBOOT, .RESIZE { color: var(--amber); }
+.SHUTOFF, .PAUSED, .UNKNOWN { color: #888; }
+
+/* activity log */
+#logbox { margin: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 3px; height: 180px; overflow: auto; padding: 8px; font-family: Consolas, monospace; font-size: 12.5px; }
+.l-info { color: var(--txt); }
+.l-ok { color: var(--green); }
+.l-warn { color: var(--amber); }
+.l-error { color: var(--red); }
+.l-sys { color: var(--navy); font-weight: bold; }
+
+/* statusbar */
+#statusbar { background: var(--navy); color: #fff; padding: 6px 12px; display: flex; font-size: 13px; }
+#statusbar .clock { margin-left: auto; }
+
+/* snapshot dialog */
+#snapdlg { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: center; justify-content: center; z-index: 50; }
+#snapdlg .box { background: var(--soft); border: 1px solid var(--line); border-radius: 4px; width: 460px; max-width: 92vw; padding-bottom: 16px; }
+#snapdlg .hd { background: var(--navy); color: #fff; padding: 10px 16px; font-weight: bold; }
+#snapdlg .bd { padding: 14px 16px; }
+#snapdlg select, #snapdlg input { width: 100%; margin: 4px 0 10px; }
+#snapdlg .btns { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* toast */
+.toast { position: fixed; bottom: 44px; right: 16px; background: var(--navy); color: #fff; padding: 10px 16px; border-radius: 4px; font-weight: bold; display: none; z-index: 60; }
+
+/* small screens (phone se access kar rahe ho to) */
+@media (max-width: 640px) {
+  .row label { min-width: 60px; }
+  #banner .sub { display: none; }
+  #tblwrap { max-height: 260px; }
+}

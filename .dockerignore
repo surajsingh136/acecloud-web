@@ -1,0 +1,13 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+webapp/PIN.txt
+webapp/PUBLIC_URL.txt
+webapp/tunnel_out.log
+*.exe
+**/spot_creds.json
+**/proxy_spot.txt
+**/spot_server.txt
+**/*_ips.txt

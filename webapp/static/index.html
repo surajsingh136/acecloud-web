@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AceCloud Manager - Web</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="banner">
+  <b>ACECLOUD</b><b style="font-weight:normal">CLOUD MANAGER | Web Dashboard</b>
+  <span class="conn" id="conn">CONNECTING...</span>
+  <span class="sub">windows spot&nbsp; |&nbsp; linux proxy&nbsp; |&nbsp; on-demand&nbsp; |&nbsp; auto timers</span>
+</div>
+
+<div class="ctrl">
+  <div class="row">
+    <label>Type:</label>
+    <select id="type" onchange="loadSizes()">
+      <option>Windows Spot</option><option>Linux Proxy</option><option>Normal Instance</option>
+    </select>
+    <label>Region:</label>
+    <select id="region" onchange="loadSizes()"><option>Mumbai</option><option>Noida</option></select>
+    <label>Billing:</label>
+    <select id="billing" onchange="loadSizes()">
+      <option>SPOT (cheap)</option><option>ON-DEMAND (hourly)</option>
+    </select>
+  </div>
+  <div class="row">
+    <label>Count:</label><input type="number" id="count" value="1" min="1" max="10" style="width:64px">
+    <label>Hours:</label><input type="number" id="hours" value="3" min="1" max="120" style="width:64px">
+    <label>Port:</label><input type="number" id="port" value="3128" style="width:74px">
+  </div>
+  <div class="row">
+    <label>Size:</label><select id="size" style="flex:1;min-width:320px;max-width:640px"></select>
+  </div>
+  <div class="row">
+    <label>Base:</label><select id="base" style="min-width:260px"></select>
+    <label>Proxy User/Pass:</label><input type="text" id="puser" value="ajay" style="width:80px">
+    <input type="password" id="ppass" value="ajay" style="width:80px">
+  </div>
+  <div class="row">
+    <button id="btnCreate" class="create" onclick="doCreate()">Create Servers</button>
+    <button id="btnDelAll" class="del" onclick="delAll()">Delete All (bill 0)</button>
+    <button id="btnDelSel" class="del" onclick="delSel()">Delete Selected</button>
+    <button id="btnSnap" onclick="openSnap()">Snapshot</button>
+    <button onclick="copyAllIps()">Copy All IPs</button>
+    <button onclick="refreshAll()">Refresh</button>
+  </div>
+  <div class="row">
+    <label style="min-width:auto">Proxy test (ip:port:user:pass):</label>
+    <input type="text" id="testline" style="width:340px;max-width:60vw" placeholder="1.2.3.4:3128:ajay:ajay">
+    <button id="btnTest" onclick="doTest()">Test Proxy</button>
+  </div>
+</div>
+
+<div id="stats">Servers: --</div>
+<div style="margin:0 12px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+  <button class="del" onclick="copyIP()">Copy IP</button>
+  <button class="del" onclick="copyPass()">Copy Password</button>
+  <button class="del" onclick="copyProxy()">Copy Proxy</button>
+  <button class="del" onclick="openConsole()">Open VNC Console</button>
+</div>
+
+<div id="tblwrap">
+<table>
+<thead><tr>
+  <th><input type="checkbox" id="ckall" onclick="ckAll()"></th>
+  <th>Status</th><th>Name</th><th>IP</th><th>Size</th><th>Region</th><th>Type</th><th>Pricing</th><th>Plan</th>
+</tr></thead>
+<tbody id="tb"></tbody>
+</table>
+</div>
+
+<div id="logbox"></div>
+
+<div id="statusbar"><span id="bal">Balance: -- | Total: -- | Active: --</span><span class="clock" id="clock"></span></div>
+
+<div id="snapdlg"><div class="box">
+  <div class="hd">MANUAL SNAPSHOT</div>
+  <div class="bd">
+    <label style="font-weight:bold;color:var(--navy)">Instance:</label>
+    <select id="snapinst"></select>
+    <label style="font-weight:bold;color:var(--navy)">Snapshot name (empty = auto):</label>
+    <input type="text" id="snapname" placeholder="my-base-snap">
+    <div class="btns">
+      <button onclick="hide('snapdlg')">CANCEL</button>
+      <button class="create" onclick="doSnap()">CREATE</button>
+    </div>
+  </div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+<script src="/app.js"></script>
+</body>
+</html>
