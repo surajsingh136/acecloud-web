@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 64" width="220" height="64" role="img" aria-label="AceCloud">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ff"/>
+      <stop offset="1" stop-color="#2b6bff"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="8" width="48" height="48" rx="14" fill="url(#g)"/>
+  <path d="M19 42h20a9 9 0 0 0 0-18 13 13 0 0 0-24-3 7.5 7.5 0 0 0 4 21z" fill="#ffffff" opacity="0.96"/>
+  <text x="62" y="30" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="800" fill="#0b1e3a">ACE</text>
+  <text x="108" y="30" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="800" fill="#1f8fff">CLOUD</text>
+  <text x="62" y="47" font-family="Segoe UI, Arial, sans-serif" font-size="9.5" letter-spacing="3" fill="#7b8aa0">MANAGER</text>
+</svg>

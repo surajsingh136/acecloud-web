@@ -18,6 +18,7 @@ import socket
 import sys
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse, parse_qs
@@ -37,7 +38,14 @@ PORT = int(os.environ.get("ACEWEB_PORT") or os.environ.get("PORT") or "8787")
 PIN = os.environ.get("ACEWEB_PIN", "") or "3315"  # default PIN (can be overridden via env)
 
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
-        ".js": "application/javascript; charset=utf-8", ".ico": "image/x-icon"}
+        ".js": "application/javascript; charset=utf-8", ".ico": "image/x-icon",
+        ".svg": "image/svg+xml"}
+
+STATIC_FILES = {"/": "index.html", "/all": "all.html", "/style.css": "style.css",
+                "/app.js": "app.js", "/all.css": "all.css", "/all.js": "all.js",
+                "/logo.svg": "logo.svg"}
+
+ACCOUNTS_FILE = SPOT_DIR / "accounts.json"
 
 # ============================== log buffer ==============================
 LOGS = []
@@ -62,6 +70,7 @@ _hook(sw)
 BUSY = False
 BUSY_LK = threading.Lock()
 STATE = {"logged": False, "balance": None, "instances": [], "creds": {}}
+ACTIVE_ID = "default"
 
 
 def begin():
@@ -153,13 +162,88 @@ def proxy_line_for(ip):
     return ""
 
 
+# ============================== accounts (multi-account) ==============================
+# The current account comes from env (ACECLOUD_EMAIL / ACECLOUD_PASSWD) and is always
+# account id "default" - it is read-only and never modified. Extra accounts can come
+# from the ACECLOUD_ACCOUNTS env var (JSON list) or from the file (added via UI).
+def _env_accounts():
+    out = []
+    raw = (os.environ.get("ACECLOUD_ACCOUNTS") or "").strip()
+    if not raw:
+        return out
+    try:
+        data = json.loads(raw)
+    except Exception:
+        push("ACECLOUD_ACCOUNTS is not valid JSON", "warn")
+        return out
+    for a in (data if isinstance(data, list) else []):
+        if isinstance(a, dict) and a.get("email") and a.get("password"):
+            out.append({
+                "id": str(a.get("id") or ("acc_" + uuid.uuid4().hex[:8])),
+                "label": str(a.get("label") or a.get("email")),
+                "email": str(a["email"]), "password": str(a["password"]),
+                "api_key": str(a.get("api_key") or ""), "note": str(a.get("note") or ""),
+                "source": "envlist",
+            })
+    return out
+
+
+def load_accounts():
+    accts = []
+    if EMAIL and PASSWD:
+        accts.append({"id": "default", "label": "Current (default)", "email": EMAIL,
+                      "password": PASSWD, "api_key": "", "note": "From environment",
+                      "source": "env"})
+    seen = {a["id"] for a in accts}
+    for a in _env_accounts():
+        if a["id"] in seen:
+            a["id"] = "acc_" + uuid.uuid4().hex[:8]
+        seen.add(a["id"])
+        accts.append(a)
+    try:
+        if ACCOUNTS_FILE.exists():
+            for a in (json.loads(ACCOUNTS_FILE.read_text("utf-8")) or []):
+                if (isinstance(a, dict) and a.get("email") and a.get("password")
+                        and a.get("id") not in seen):
+                    a.setdefault("source", "file")
+                    seen.add(a.get("id"))
+                    accts.append(a)
+    except Exception:
+        pass
+    return accts
+
+
+def save_accounts(accts):
+    data = [a for a in accts if a.get("source") == "file"]
+    try:
+        ACCOUNTS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def find_account(aid):
+    for a in load_accounts():
+        if a.get("id") == aid:
+            return a
+    return None
+
+
+def active_account():
+    return find_account(ACTIVE_ID) or find_account("default")
+
+
 # ============================== login / state ==============================
 def do_login():
+    a = active_account()
+    if not a:
+        STATE["logged"] = False
+        push("No account configured", "error")
+        return
     try:
-        ac.login(EMAIL, PASSWD)
-        sw.login(EMAIL, PASSWD)
+        ac.login(a["email"], a["password"])
+        sw.login(a["email"], a["password"])
         STATE["logged"] = True
-        push(f"CONNECTED: {EMAIL}", "ok")
+        push(f"CONNECTED: {a['email']} [{a.get('label') or ''}]", "ok")
     except BaseException as e:
         STATE["logged"] = False
         push(f"Login fail: {e}", "error")
@@ -505,16 +589,24 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # static files - no PIN (let the UI load; data API is protected)
-        if path == "/":
-            self._send((WEB_DIR / "static" / "index.html").read_bytes(), MIME[".html"])
-            return
-        if path in ("/style.css", "/app.js"):
-            fname = path.lstrip("/")
-            self._send((WEB_DIR / "static" / fname).read_bytes(), MIME[Path(fname).suffix])
+        fname = STATIC_FILES.get(path)
+        if fname:
+            self._send((WEB_DIR / "static" / fname).read_bytes(),
+                       MIME.get(Path(fname).suffix, "application/octet-stream"))
             return
 
         if not self._authed():
             self._json({"error": "wrong pin"}, 401)
+            return
+
+        if path == "/api/accounts":
+            self._json({"active": ACTIVE_ID, "accounts": [{
+                "id": a["id"], "label": a.get("label") or a["email"],
+                "email": a["email"], "has_pass": bool(a.get("password")),
+                "api_key": a.get("api_key") or "", "note": a.get("note") or "",
+                "source": a.get("source", "file"),
+                "editable": a.get("source") == "file",
+            } for a in load_accounts()]})
             return
 
         if path == "/api/state":
@@ -578,6 +670,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- POST ----------
     def do_POST(self):
+        global ACTIVE_ID
         if not self._authed():
             self._json({"error": "wrong pin"}, 401)
             return
@@ -639,6 +732,69 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
             return
 
+        if path == "/api/accounts/add":
+            label = (b.get("label") or "").strip()
+            email = (b.get("email") or "").strip()
+            pwd = b.get("password") or ""
+            key = (b.get("api_key") or "").strip()
+            note = (b.get("note") or "").strip()
+            eid = (b.get("id") or "").strip()
+            accts = load_accounts()
+            if eid:
+                tgt = next((a for a in accts if a.get("id") == eid), None)
+                if not tgt or tgt.get("source") != "file":
+                    self._json({"ok": False, "msg": "This account is read-only"}, 400)
+                    return
+                if label:
+                    tgt["label"] = label
+                if email:
+                    tgt["email"] = email
+                if pwd:
+                    tgt["password"] = pwd
+                tgt["api_key"] = key
+                tgt["note"] = note
+                save_accounts(accts)
+                new_id = eid
+            else:
+                if not email or not pwd:
+                    self._json({"ok": False, "msg": "Email and password required"}, 400)
+                    return
+                new_id = "acc_" + uuid.uuid4().hex[:8]
+                accts.append({"id": new_id, "label": label or email, "email": email,
+                              "password": pwd, "api_key": key, "note": note, "source": "file"})
+                save_accounts(accts)
+            if b.get("use"):
+                ACTIVE_ID = new_id
+                threading.Thread(target=lambda: (do_login(), refresh_state()),
+                                 daemon=True).start()
+            self._json({"ok": True, "id": new_id})
+            return
+
+        if path == "/api/accounts/delete":
+            eid = (b.get("id") or "").strip()
+            accts = load_accounts()
+            tgt = next((a for a in accts if a.get("id") == eid), None)
+            if not tgt or tgt.get("source") != "file":
+                self._json({"ok": False, "msg": "Cannot delete this account"}, 400)
+                return
+            save_accounts([a for a in accts if a.get("id") != eid])
+            if ACTIVE_ID == eid:
+                ACTIVE_ID = "default"
+                threading.Thread(target=lambda: (do_login(), refresh_state()),
+                                 daemon=True).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/accounts/activate":
+            eid = (b.get("id") or "").strip()
+            if not find_account(eid):
+                self._json({"ok": False, "msg": "No such account"}, 400)
+                return
+            ACTIVE_ID = eid
+            threading.Thread(target=lambda: (do_login(), refresh_state()), daemon=True).start()
+            self._json({"ok": True})
+            return
+
         if path == "/api/login":
             threading.Thread(target=lambda: (do_login(), refresh_state()), daemon=True).start()
             self._json({"ok": True})
@@ -658,6 +814,7 @@ def main():
     print("\n" + "=" * 58)
     print("  AceCloud Web Manager v2")
     print(f"  LOCAL :  http://127.0.0.1:{PORT}")
+    print(f"  HUB   :  http://127.0.0.1:{PORT}/all")
     print(f"  PIN   :  {PIN}   (asked once per browser/phone)")
     print("  Need a public URL? Run tunnel.bat (free Cloudflare)")
     print("=" * 58 + "\n")

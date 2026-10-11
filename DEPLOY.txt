@@ -44,6 +44,19 @@ STEP 2 - Deploy on Render.com
       https://acecloud-web.onrender.com
 
 --------------------------------------------------------
+HUB  /  MULTI-ACCOUNT  (/all)
+--------------------------------------------------------
+- Open  https://<your-app>.onrender.com/all  for the hub (ACECLOUD logo).
+- Click the AceCloud card to add/select accounts (label, email, password, optional API key).
+- "Current (default)" account comes from env (ACECLOUD_EMAIL / ACECLOUD_PASSWD) and is
+  read-only - it is never modified.
+- Accounts added in the UI are saved to spot/accounts.json. Render's free disk is
+  ephemeral, so they are lost on restart/redeploy. To keep extra accounts permanently,
+  set the ACECLOUD_ACCOUNTS env var to a JSON list, e.g.:
+      ACECLOUD_ACCOUNTS=[{"label":"Office","email":"a@b.com","password":"pw","api_key":""}]
+- The manager itself stays at  https://<your-app>.onrender.com/  (unchanged).
+
+--------------------------------------------------------
 IMPORTANT NOTES
 --------------------------------------------------------
 - Render FREE sleeps after 15 min of no traffic.

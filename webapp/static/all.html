@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACE Hub - All Sites</title>
+<link rel="stylesheet" href="/all.css">
+</head>
+<body>
+<header class="topbar">
+  <img class="brandlogo" src="/logo.svg" alt="ACECLOUD">
+  <div class="brandtxt">
+    <div class="brandtitle">ACE HUB</div>
+    <div class="brandsub">All your web tools in one place</div>
+  </div>
+  <div class="spacer"></div>
+  <a class="home" href="/">Open Manager</a>
+</header>
+
+<main>
+  <h2 class="sec">Sites</h2>
+  <div id="sites" class="grid"></div>
+  <button class="addsite" onclick="addPlaceholder()">+ Add website (coming soon)</button>
+</main>
+
+<div id="cfg" class="modal">
+  <div class="box">
+    <div class="hd">
+      <img src="/logo.svg" class="mini" alt="">
+      <span id="cfgTitle">ACECLOUD - Configure</span>
+      <button class="x" onclick="hide('cfg')">&times;</button>
+    </div>
+    <div class="bd">
+      <p class="info">Enter the important details (login / API) for an account. The current
+        (default) account keeps working and is never modified.</p>
+      <div id="activeInfo" class="activeInfo"></div>
+      <div id="acclist"></div>
+
+      <div class="form">
+        <h3 id="formTitle">Add account</h3>
+        <label>Label</label>
+        <input id="alabel" placeholder="e.g. Office">
+        <label>Email</label>
+        <input id="aemail" placeholder="you@example.com">
+        <label>Password</label>
+        <input id="apass" type="password" placeholder="********">
+        <label>API key (optional)</label>
+        <input id="akey" placeholder="leave empty if none">
+        <label>Note (optional)</label>
+        <input id="anote" placeholder="">
+        <label class="chk"><input type="checkbox" id="ause" checked> Use this account now</label>
+        <div class="btns">
+          <button class="ghost" onclick="resetForm()">Clear</button>
+          <button class="primary" onclick="saveAccount()">Save account</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/all.js"></script>
+</body>
+</html>
