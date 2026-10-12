@@ -140,6 +140,24 @@ def security_groups(key):
     return _list("GET", "/securitygroup/list", key)
 
 
+def pick_security_group(key):
+    sgs = security_groups(key)
+    if not sgs:
+        return []
+    for s in sgs:
+        name = str(s.get("name") or "").lower()
+        if "allow-all" in name or "allow all" in name or name == "allowall":
+            return [_num(s.get("id"))]
+        if "proxy" in name or "squid" in name:
+            return [_num(s.get("id"))]
+    # prefer id 3776 if present (common in this account)
+    for s in sgs:
+        if s.get("id") == 3776:
+            return [3776]
+    # fallback first
+    return [_num(sgs[0].get("id"))] if sgs else []
+
+
 def ssh_keys(key):
     return _list("GET", "/sshpubkey/list", key)
 
@@ -325,7 +343,10 @@ def meta(key):
     info = verify(key)
     return {"ok": bool(info.get("ok")), "user": info.get("user", ""),
             "email": info.get("email", ""), "images": imgs, "types": types,
-            "subnets": subs, "default_subnet_id": dsub.get("id") or ""}
+            "subnets": subs, "default_subnet_id": dsub.get("id") or "",
+            "security_groups": [{"id": s.get("id"), "name": s.get("name"),
+                                 "description": s.get("description") or ""}
+                                for s in security_groups(key)]}
 
 
 def state(key):
@@ -372,6 +393,14 @@ def create_proxies(key, cfg, count):
     cfg.setdefault("root_password", "")
     cfg.setdefault("instance_name", "exproxy")
     cfg.setdefault("root_disk_gib", 25)
+    # auto-pick SG if not provided
+    if not cfg.get("security_group_ids"):
+        try:
+            sg = pick_security_group(key)
+            if sg:
+                cfg["security_group_ids"] = sg
+        except Exception:
+            pass
 
     me = user_info(key)
     log("Excloud user: {0} ({1})".format(me.get("org_name", "?"), me.get("email", "?")), "sys")
