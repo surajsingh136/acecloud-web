@@ -14,7 +14,7 @@
   --amber: #b45309;
 }
 * { box-sizing: border-box; font-family: "Segoe UI", Arial, sans-serif; }
-body { margin: 0; background: var(--soft); color: var(--txt); font-size: 14px; }
+body { margin: 0; background: var(--soft); color: var(--txt); font-size: 14px; padding-bottom: 44px; }
 
 /* banner */
 #banner { background: var(--navy); color: #fff; padding: 12px 16px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
@@ -66,7 +66,7 @@ td.st { font-weight: bold; }
 .l-sys { color: var(--navy); font-weight: bold; }
 
 /* statusbar */
-#statusbar { background: var(--navy); color: #fff; padding: 6px 12px; display: flex; font-size: 13px; }
+#statusbar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--navy); color: #fff; padding: 6px 12px; display: flex; font-size: 13px; z-index: 40; }
 #statusbar .clock { margin-left: auto; }
 
 /* snapshot dialog */
