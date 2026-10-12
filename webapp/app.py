@@ -14,6 +14,7 @@ import json
 import os
 import random
 import re
+import requests
 import socket
 import sys
 import threading
@@ -30,6 +31,7 @@ sys.path.insert(0, str(SPOT_DIR / "server"))
 
 import acecloud_spot as ac          # original script - untouched
 import spot_server as sw            # original script - untouched
+import hostzop_core as hz           # new module - hostzop.com web port (own code)
 from deploy_core import (load_plans, save_plan, plan_timer, fetch_ondemand_price,
                          users_from_txt, FLV_SPEC, REGION_KEYS, EMAIL, PASSWD, CREDS_FILE)
 
@@ -43,7 +45,9 @@ MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
 
 STATIC_FILES = {"/": "index.html", "/all": "all.html", "/style.css": "style.css",
                 "/app.js": "app.js", "/all.css": "all.css", "/all.js": "all.js",
-                "/logo.svg": "logo.svg"}
+                "/logo.svg": "logo.svg", "/hostzop": "hostzop.html",
+                "/hostzop.js": "hostzop.js", "/hostzop.css": "hostzop.css",
+                "/hostzop-logo.svg": "hostzop-logo.svg"}
 
 ACCOUNTS_FILE = SPOT_DIR / "accounts.json"
 
@@ -65,6 +69,7 @@ def _hook(mod):
 
 _hook(ac)
 _hook(sw)
+_hook(hz)
 
 # ============================== app state ==============================
 BUSY = False
@@ -232,6 +237,233 @@ def active_account():
     return find_account(ACTIVE_ID) or find_account("default")
 
 
+# ============================== hostzop (multi-account) ==============================
+# Hostzop uses an API key (no email/password). The default account comes from
+# HOSTZOP_APIKEY env (read-only); extra accounts come from HOSTZOP_ACCOUNTS or the UI.
+HZ_FILE = SPOT_DIR / "hostzop.json"
+HZ_ACTIVE = "default"
+
+
+def _env_hz():
+    out = []
+    key = (os.environ.get("HOSTZOP_APIKEY") or "").strip()
+    if key:
+        out.append({"id": "default", "label": "Current (default)", "apikey": key,
+                    "billing_account_id": (os.environ.get("HOSTZOP_BILLING_ACCOUNT_ID") or "").strip(),
+                    "location": (os.environ.get("HOSTZOP_LOCATION") or "").strip(),
+                    "note": "From environment", "source": "env"})
+    raw = (os.environ.get("HOSTZOP_ACCOUNTS") or "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+        except Exception:
+            push("HOSTZOP_ACCOUNTS is not valid JSON", "warn")
+            data = []
+        for a in (data if isinstance(data, list) else []):
+            if isinstance(a, dict) and a.get("apikey"):
+                out.append({"id": str(a.get("id") or ("hz_" + uuid.uuid4().hex[:8])),
+                            "label": str(a.get("label") or "Hostzop"),
+                            "apikey": str(a["apikey"]),
+                            "billing_account_id": str(a.get("billing_account_id") or ""),
+                            "location": str(a.get("location") or ""),
+                            "note": str(a.get("note") or ""), "source": "envlist"})
+    return out
+
+
+def load_hz_accounts():
+    accts, seen = [], set()
+    for a in _env_hz():
+        if a["id"] in seen:
+            a["id"] = "hz_" + uuid.uuid4().hex[:8]
+        seen.add(a["id"])
+        accts.append(a)
+    try:
+        if HZ_FILE.exists():
+            for a in (json.loads(HZ_FILE.read_text("utf-8")) or []):
+                if isinstance(a, dict) and a.get("apikey") and a.get("id") not in seen:
+                    a.setdefault("source", "file")
+                    seen.add(a.get("id"))
+                    accts.append(a)
+    except Exception:
+        pass
+    return accts
+
+
+def save_hz_accounts(accts):
+    data = [a for a in accts if a.get("source") == "file"]
+    try:
+        HZ_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def find_hz_account(aid):
+    for a in load_hz_accounts():
+        if a.get("id") == aid:
+            return a
+    return None
+
+
+def active_hz():
+    accts = load_hz_accounts()
+    return (find_hz_account(HZ_ACTIVE)
+            or next((a for a in accts if a.get("source") == "env"), None)
+            or (accts[0] if accts else None))
+
+
+def hz_key():
+    return ((active_hz() or {}).get("apikey") or "").strip()
+
+
+def hz_meta():
+    key = hz_key()
+    a = active_hz() or {}
+    if not key:
+        return {"ok": False, "msg": "No hostzop account", "locations": [], "pools": [],
+                "images": [], "sizes": [], "user": ""}
+    info = hz.verify(key)
+    pol = hz.pricing(key)
+    sizes = [{"name": n, "cpu": c, "ram": r, "disk": d,
+              "rate": hz.hourly_rate(pol, c, r, d)} for n, c, r, d in hz.SIZE_CHART]
+    pools = [{"name": p.get("name"), "uuid": p.get("uuid"),
+              "default": bool(p.get("is_default_designated"))} for p in hz.pools(key)]
+    flat = [{"name": n, "versions": vs} for n, vs in hz.images(key)]
+    return {"ok": True, "user": info.get("user", "") if info.get("ok") else "",
+            "locations": info.get("locations", []) if info.get("ok") else [],
+            "pools": pools, "images": flat, "sizes": sizes,
+            "billing_account_id": a.get("billing_account_id") or ""}
+
+
+def job_hz_create(body):
+    try:
+        key = hz_key()
+        res = hz.create_proxies(key, body, int(body.get("count", 1) or 1))
+        lines = res.get("lines", [])
+        for ln in lines:
+            push(f"READY {ln}", "ok")
+        if lines:
+            out = SPOT_DIR / "hostzop_proxy.txt"
+            with open(out, "a") as f:
+                for ln in lines:
+                    f.write(ln + "\n")
+            push(f"Saved {len(lines)} line(s) -> {out}", "ok")
+        for e in res.get("errors", []):
+            push(e, "warn")
+    except BaseException as e:
+        push(f"HOSTZOP CREATE ERROR: {e}", "error")
+    finally:
+        end()
+
+
+def job_hz_delete(uuids, is_all):
+    try:
+        key = hz_key()
+        if is_all:
+            hz.delete_all(key)
+        else:
+            hz.delete_vms(key, uuids)
+    except BaseException as e:
+        push(f"HOSTZOP DELETE ERROR: {e}", "error")
+    finally:
+        end()
+
+
+def detect_account(email, password):
+    """Temporary login in a SEPARATE session -> this account's projects + networks.
+    Does NOT touch the active session of the running account."""
+    web = "https://customer.acecloud.ai"
+    api = f"{web}/api/v1"
+    try:
+        s = requests.Session()
+        csrf = s.get(f"{web}/v1/api/auth/csrf", timeout=20).json().get("csrfToken")
+        r2 = s.post(f"{web}/v1/api/auth/callback/credentials",
+                    data={"email": email, "password": password, "csrfToken": csrf,
+                          "redirect": "false", "json": "true"}, timeout=20)
+        if r2.status_code != 200:
+            return {"ok": False, "msg": f"Login failed HTTP {r2.status_code}"}
+        token = (s.get(f"{web}/v1/api/auth/session", timeout=20).json()
+                 .get("user", {}).get("accessToken"))
+        if not token:
+            return {"ok": False, "msg": "No access token (wrong login?)"}
+        h = {"Authorization": f"Bearer {token}"}
+        projects = (s.get(f"{api}/projects", headers=h, timeout=30).json() or {}).get("data") or {}
+        out_projects, networks = [], {}
+        for pid, pv in projects.items():
+            regs = [rk for rk, rv in ((pv or {}).get("regions") or {}).items()
+                    if isinstance(rv, dict) and rv.get("is_accessible")]
+            out_projects.append({"id": pid, "name": (pv or {}).get("name") or pid, "regions": regs})
+        for p in out_projects:
+            for reg in p["regions"]:
+                if reg in networks:
+                    continue
+                try:
+                    vpcs = (s.get(f"{api}/cloud/vpcs", headers=h,
+                                  params={"region": reg, "project_id": p["id"]}, timeout=30)
+                            .json() or {}).get("data") or []
+                except Exception:
+                    vpcs = []
+                networks[reg] = [{"id": v.get("id"), "name": v.get("name"),
+                                  "external": bool(v.get("router_external"))}
+                                 for v in vpcs if isinstance(v, dict) and v.get("id")]
+        return {"ok": True, "projects": out_projects, "networks": networks}
+    except Exception as e:
+        return {"ok": False, "msg": str(e)}
+
+
+def discover_account():
+    """After login, map THIS account's project id + external network per region.
+    Uses saved overrides if present, otherwise auto-detects. Project/network ids
+    are account-specific, unlike the hardcoded defaults."""
+    a = active_account() or {}
+    pid = (a.get("project_id") or "").strip()
+    if not pid:
+        try:
+            r = sw.SESSION.get(f"{sw.API_BASE}/projects",
+                               headers={"Authorization": f"Bearer {sw.AUTH_TOKEN}"}, timeout=30)
+            projects = (r.json() or {}).get("data") or {}
+        except BaseException as e:
+            push(f"Project discovery failed: {e}", "warn")
+            projects = {}
+        if isinstance(projects, dict) and projects:
+            for k, v in projects.items():
+                if isinstance(v, dict) and (v.get("name") or "").lower() == "default project":
+                    pid = k
+                    break
+            pid = pid or next(iter(projects.keys()))
+    if pid:
+        ac.PROJECT_ID = pid
+        sw.PROJECT_ID = pid
+        push(f"Project: {pid[:8]}...", "ok")
+    else:
+        push("No project id (set it in account details)", "warn")
+
+    overrides = {"ap-south-mum-2": a.get("net_mumbai"), "ap-south-noi-1": a.get("net_noida")}
+    regions = sorted(set(list(sw.WREGIONS.keys()) + list(ac.REGIONS.keys())))
+    for code in regions:
+        nid = (overrides.get(code) or "").strip()
+        if not nid:
+            try:
+                rr = sw.SESSION.get(f"{sw.API_BASE}/cloud/vpcs",
+                                    headers={"Authorization": f"Bearer {sw.AUTH_TOKEN}"},
+                                    params={"region": code, "project_id": pid}, timeout=30)
+                vpcs = (rr.json() or {}).get("data") or []
+            except BaseException:
+                vpcs = []
+            ext = next((v for v in vpcs if isinstance(v, dict) and v.get("router_external")), None)
+            if not ext and vpcs:
+                ext = vpcs[0]
+            nid = (ext or {}).get("id", "") if isinstance(ext, dict) else ""
+        if nid:
+            if code in ac.REGIONS:
+                ac.REGIONS[code]["network"] = nid
+            if code in sw.WREGIONS:
+                sw.WREGIONS[code]["net"] = nid
+    dreg = (a.get("region") or "").strip()
+    if dreg in regions:
+        ac.REGION = dreg
+        sw.REGION = dreg
+
+
 # ============================== login / state ==============================
 def do_login():
     a = active_account()
@@ -243,6 +475,7 @@ def do_login():
         ac.login(a["email"], a["password"])
         sw.login(a["email"], a["password"])
         STATE["logged"] = True
+        discover_account()
         push(f"CONNECTED: {a['email']} [{a.get('label') or ''}]", "ok")
     except BaseException as e:
         STATE["logged"] = False
@@ -604,9 +837,32 @@ class Handler(BaseHTTPRequestHandler):
                 "id": a["id"], "label": a.get("label") or a["email"],
                 "email": a["email"], "has_pass": bool(a.get("password")),
                 "api_key": a.get("api_key") or "", "note": a.get("note") or "",
+                "region": a.get("region") or "",
+                "project_id": a.get("project_id") or "",
+                "net_mumbai": a.get("net_mumbai") or "",
+                "net_noida": a.get("net_noida") or "",
                 "source": a.get("source", "file"),
                 "editable": a.get("source") == "file",
             } for a in load_accounts()]})
+            return
+
+        if path == "/api/hostzop/accounts":
+            self._json({"active": HZ_ACTIVE, "accounts": [{
+                "id": a["id"], "label": a.get("label") or "Hostzop",
+                "apikey": a.get("apikey") or "", "has_key": bool(a.get("apikey")),
+                "billing_account_id": a.get("billing_account_id") or "",
+                "location": a.get("location") or "", "note": a.get("note") or "",
+                "source": a.get("source", "file"),
+                "editable": a.get("source") == "file",
+            } for a in load_hz_accounts()]})
+            return
+
+        if path == "/api/hostzop/meta":
+            self._json(hz_meta())
+            return
+
+        if path == "/api/hostzop/state":
+            self._json(hz.state(hz_key()))
             return
 
         if path == "/api/state":
@@ -670,7 +926,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- POST ----------
     def do_POST(self):
-        global ACTIVE_ID
+        global ACTIVE_ID, HZ_ACTIVE
         if not self._authed():
             self._json({"error": "wrong pin"}, 401)
             return
@@ -732,13 +988,24 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True})
             return
 
+        if path == "/api/accounts/detect":
+            self._json(detect_account((b.get("email") or "").strip(),
+                                      b.get("password") or ""))
+            return
+
         if path == "/api/accounts/add":
             label = (b.get("label") or "").strip()
             email = (b.get("email") or "").strip()
             pwd = b.get("password") or ""
             key = (b.get("api_key") or "").strip()
             note = (b.get("note") or "").strip()
+            region = (b.get("region") or "").strip()
+            project_id = (b.get("project_id") or "").strip()
+            net_mumbai = (b.get("net_mumbai") or "").strip()
+            net_noida = (b.get("net_noida") or "").strip()
             eid = (b.get("id") or "").strip()
+            extra = {"api_key": key, "note": note, "region": region,
+                     "project_id": project_id, "net_mumbai": net_mumbai, "net_noida": net_noida}
             accts = load_accounts()
             if eid:
                 tgt = next((a for a in accts if a.get("id") == eid), None)
@@ -751,8 +1018,7 @@ class Handler(BaseHTTPRequestHandler):
                     tgt["email"] = email
                 if pwd:
                     tgt["password"] = pwd
-                tgt["api_key"] = key
-                tgt["note"] = note
+                tgt.update(extra)
                 save_accounts(accts)
                 new_id = eid
             else:
@@ -760,8 +1026,10 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": False, "msg": "Email and password required"}, 400)
                     return
                 new_id = "acc_" + uuid.uuid4().hex[:8]
-                accts.append({"id": new_id, "label": label or email, "email": email,
-                              "password": pwd, "api_key": key, "note": note, "source": "file"})
+                rec = {"id": new_id, "label": label or email, "email": email,
+                       "password": pwd, "source": "file"}
+                rec.update(extra)
+                accts.append(rec)
                 save_accounts(accts)
             if b.get("use"):
                 ACTIVE_ID = new_id
@@ -792,6 +1060,91 @@ class Handler(BaseHTTPRequestHandler):
                 return
             ACTIVE_ID = eid
             threading.Thread(target=lambda: (do_login(), refresh_state()), daemon=True).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/hostzop/verify":
+            self._json(hz.verify((b.get("apikey") or "").strip()))
+            return
+
+        if path == "/api/hostzop/accounts/add":
+            label = (b.get("label") or "").strip()
+            key = (b.get("apikey") or "").strip()
+            bill = str(b.get("billing_account_id") or "").strip()
+            loc = (b.get("location") or "").strip()
+            note = (b.get("note") or "").strip()
+            eid = (b.get("id") or "").strip()
+            accts = load_hz_accounts()
+            if eid:
+                tgt = next((a for a in accts if a.get("id") == eid), None)
+                if not tgt or tgt.get("source") != "file":
+                    self._json({"ok": False, "msg": "This account is read-only"}, 400)
+                    return
+                if label:
+                    tgt["label"] = label
+                if key:
+                    tgt["apikey"] = key
+                tgt["billing_account_id"] = bill
+                tgt["location"] = loc
+                tgt["note"] = note
+                save_hz_accounts(accts)
+                new_id = eid
+            else:
+                if not key:
+                    self._json({"ok": False, "msg": "API key required"}, 400)
+                    return
+                new_id = "hz_" + uuid.uuid4().hex[:8]
+                accts.append({"id": new_id, "label": label or "Hostzop", "apikey": key,
+                              "billing_account_id": bill, "location": loc,
+                              "note": note, "source": "file"})
+                save_hz_accounts(accts)
+            if b.get("use"):
+                HZ_ACTIVE = new_id
+            self._json({"ok": True, "id": new_id})
+            return
+
+        if path == "/api/hostzop/accounts/delete":
+            eid = (b.get("id") or "").strip()
+            accts = load_hz_accounts()
+            tgt = next((a for a in accts if a.get("id") == eid), None)
+            if not tgt or tgt.get("source") != "file":
+                self._json({"ok": False, "msg": "Cannot delete this account"}, 400)
+                return
+            save_hz_accounts([a for a in accts if a.get("id") != eid])
+            if HZ_ACTIVE == eid:
+                HZ_ACTIVE = "default"
+            self._json({"ok": True})
+            return
+
+        if path == "/api/hostzop/accounts/activate":
+            eid = (b.get("id") or "").strip()
+            if not find_hz_account(eid):
+                self._json({"ok": False, "msg": "No such account"}, 400)
+                return
+            HZ_ACTIVE = eid
+            self._json({"ok": True})
+            return
+
+        if path == "/api/hostzop/create":
+            if not hz_key():
+                self._json({"ok": False, "msg": "Add/activate a hostzop account first"}, 400)
+                return
+            if not begin():
+                self._json({"ok": False, "msg": "Busy..."}, 409)
+                return
+            threading.Thread(target=job_hz_create, daemon=True, args=(b,)).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/hostzop/delete":
+            if not hz_key():
+                self._json({"ok": False, "msg": "No hostzop account"}, 400)
+                return
+            if not begin():
+                self._json({"ok": False, "msg": "Busy..."}, 409)
+                return
+            threading.Thread(target=job_hz_delete, daemon=True,
+                             args=(b.get("uuids") or [], bool(b.get("all")))).start()
             self._json({"ok": True})
             return
 

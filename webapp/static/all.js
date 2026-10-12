@@ -7,6 +7,8 @@ const $ = (id) => document.getElementById(id);
 const SITES = [
   { id: "acecloud", name: "AceCloud", logo: "/logo.svg",
     desc: "Windows Spot & Linux proxy VMs", config: true, url: "/" },
+  { id: "hostzop", name: "Hostzop", logo: "/hostzop-logo.svg",
+    desc: "Proxy & RDP server maker (API key login)", config: false, url: "/hostzop" },
   // Example for future websites:
   // { id: "other", name: "Other Tool", logo: "/logo.svg",
   //   desc: "Short description", config: false, url: "https://example.com" },
@@ -56,6 +58,7 @@ function addPlaceholder() { toast("Coming soon - more websites will be added her
 /* ---------------- account config modal ---------------- */
 let EDIT_ID = "";
 let ACC = {};
+let DETECT = null;
 
 async function openConfig(site) {
   $("cfgTitle").textContent = site.name + " - Configure";
@@ -66,8 +69,11 @@ async function openConfig(site) {
 
 function resetForm() {
   EDIT_ID = "";
+  DETECT = null;
   $("formTitle").textContent = "Add account";
-  ["alabel", "aemail", "apass", "akey", "anote"].forEach(i => { $(i).value = ""; });
+  ["alabel", "aemail", "apass", "akey", "anote", "aproj", "anetmum", "anetnoi"].forEach(i => { $(i).value = ""; });
+  $("aregion").value = "ap-south-mum-2";
+  $("detectBox").style.display = "none";
   $("ause").checked = true;
 }
 
@@ -98,11 +104,57 @@ async function loadAccounts() {
   $("activeInfo").textContent = "Active account: " + (act.email || "-") + (act.label ? " (" + act.label + ")" : "");
 }
 
+async function detect() {
+  const email = $("aemail").value.trim();
+  const password = $("apass").value;
+  if (!email || !password) { toast("Enter email and password first"); return; }
+  toast("Detecting...");
+  let d;
+  try { d = await POST("/api/accounts/detect", { email, password }); }
+  catch (e) { toast("Failed"); return; }
+  if (!d.ok) { toast(d.msg || "Detect failed"); return; }
+  DETECT = d;
+  const projs = d.projects || [];
+  $("detectBox").style.display = "block";
+  $("projSel").innerHTML = projs.map(p =>
+    `<option value="${esc(p.id)}">${esc(p.name)} (${esc(String(p.id).slice(0, 8))}...)</option>`).join("");
+  if (projs[0]) $("aproj").value = projs[0].id;
+  renderNets();
+  toast("Details detected");
+}
+
+const NETMAP = { "ap-south-mum-2": "anetmum", "ap-south-noi-1": "anetnoi" };
+function renderNets() {
+  if (!DETECT) return;
+  $("aproj").value = $("projSel").value;
+  const proj = (DETECT.projects || []).find(p => p.id === $("projSel").value) || {};
+  const nets = DETECT.networks || {};
+  const regions = proj.regions || Object.keys(nets);
+  $("netBox").innerHTML = regions.map(r => {
+    const list = nets[r] || [];
+    return `<label>Network (${esc(r)})</label><select data-region="${esc(r)}" onchange="netChanged('${esc(r)}',this.value)">` +
+      list.map(n => `<option value="${esc(n.id)}">${esc(n.name)}${n.external ? " (external)" : ""}</option>`).join("") +
+      `</select>`;
+  }).join("");
+  regions.forEach(r => {
+    const sel = $("netBox").querySelector(`select[data-region="${r}"]`);
+    const inp = NETMAP[r];
+    if (inp) $(inp).value = sel ? sel.value : "";
+  });
+  $("detectBox").style.display = "block";
+}
+function netChanged(region, val) {
+  const inp = NETMAP[region];
+  if (inp) $(inp).value = val;
+}
+
 async function saveAccount() {
   const body = {
     id: EDIT_ID, label: $("alabel").value.trim(), email: $("aemail").value.trim(),
     password: $("apass").value, api_key: $("akey").value.trim(),
     note: $("anote").value.trim(), use: $("ause").checked,
+    region: $("aregion").value, project_id: $("aproj").value.trim(),
+    net_mumbai: $("anetmum").value.trim(), net_noida: $("anetnoi").value.trim(),
   };
   if (!EDIT_ID && (!body.email || !body.password)) { toast("Email and password required"); return; }
   let d;
@@ -116,12 +168,18 @@ function editAccount(id) {
   const a = ACC[id];
   if (!a) return;
   EDIT_ID = id;
+  DETECT = null;
   $("formTitle").textContent = "Edit account";
   $("alabel").value = a.label || "";
   $("aemail").value = a.email || "";
   $("apass").value = "";
   $("akey").value = a.api_key || "";
   $("anote").value = a.note || "";
+  $("aregion").value = a.region || "ap-south-mum-2";
+  $("aproj").value = a.project_id || "";
+  $("anetmum").value = a.net_mumbai || "";
+  $("anetnoi").value = a.net_noida || "";
+  $("detectBox").style.display = "none";
   $("cfg").scrollTop = 0;
 }
 

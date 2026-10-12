@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HOSTZOP Manager</title>
+<link rel="stylesheet" href="/hostzop.css">
+</head>
+<body>
+<header class="topbar">
+  <img class="brandlogo" src="/hostzop-logo.svg" alt="HOSTZOP">
+  <div class="brandtxt">
+    <div class="brandtitle">HOSTZOP MANAGER</div>
+    <div class="brandsub">Proxy &amp; server maker via API key</div>
+  </div>
+  <div class="spacer"></div>
+  <a class="linkbtn" href="/all">Hub</a>
+  <a class="linkbtn" href="/">AceCloud</a>
+</header>
+
+<main>
+  <div class="tabs">
+    <div class="tab on" data-t="accounts" onclick="showTab('accounts')">Accounts</div>
+    <div class="tab" data-t="create" onclick="showTab('create')">Create Servers</div>
+    <div class="tab" data-t="servers" onclick="showTab('servers')">Servers</div>
+    <div class="tab" data-t="logs" onclick="showTab('logs')">Logs</div>
+  </div>
+
+  <!-- ---------------- ACCOUNTS ---------------- -->
+  <section id="p-accounts" class="panel on">
+    <div class="card">
+      <h3>Hostzop accounts</h3>
+      <div id="activeInfo" class="activeInfo">Active account: -</div>
+      <div id="acclist"></div>
+    </div>
+
+    <div class="card">
+      <h3 id="formTitle">Add account</h3>
+      <p class="hint">Hostzop uses an <b>API key</b> (no email/password). Create a token in the
+        Hostzop UI, paste it below. Billing account id and location are optional.</p>
+      <div class="grid2">
+        <div><label>Label</label><input id="alabel" placeholder="e.g. Office"></div>
+        <div><label>API key (required)</label><input id="akey" placeholder="your hostzop api key"></div>
+        <div><label>Billing account id (optional)</label><input id="abill" placeholder="e.g. 129754"></div>
+        <div><label>Default location (optional)</label>
+          <select id="aloc"><option value="">(default)</option></select></div>
+      </div>
+      <label>Note (optional)</label>
+      <input id="anote" placeholder="">
+      <label class="chk"><input type="checkbox" id="ause" checked> Use this account now</label>
+      <div class="btns">
+        <button class="ghost" onclick="verifyKey()">Verify API key</button>
+        <button class="ghost" onclick="resetForm()">Clear</button>
+        <button class="primary" onclick="saveAccount()">Save account</button>
+      </div>
+      <div id="verifyOut" class="hint" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ---------------- CREATE ---------------- -->
+  <section id="p-create" class="panel">
+    <div class="card">
+      <h3>Create proxy / server</h3>
+      <p class="hint">Ubuntu installs a Squid proxy (ip:port:user:pass). Windows makes an RDP
+        server (ip:3389:Administrator:password).</p>
+      <div class="grid3">
+        <div><label>OS</label>
+          <select id="c_os" onchange="onOsChange()">
+            <option value="ubuntu">Ubuntu (proxy)</option>
+            <option value="centos">CentOS (proxy)</option>
+            <option value="windows">Windows Server (RDP)</option>
+          </select></div>
+        <div><label>Version</label><select id="c_ver"></select></div>
+        <div><label>Count</label><input id="c_count" value="1"></div>
+      </div>
+      <div class="grid3">
+        <div><label>Size</label><select id="c_size"></select></div>
+        <div><label>Server class (pool)</label><select id="c_pool"></select></div>
+        <div><label>Instance name</label><input id="c_name" value="hzproxy"></div>
+      </div>
+      <div class="grid3">
+        <div><label>Network name</label><input id="c_net" value="My Network"></div>
+        <div><label>Proxy user</label><input id="c_user" value="ajay"></div>
+        <div><label>Proxy pass</label><input id="c_pass" value="ajay"></div>
+      </div>
+      <div class="grid3">
+        <div><label>Proxy port</label><input id="c_port" value="3128"></div>
+        <div><label>Root password</label><input id="c_root" value="Rr@123456"></div>
+        <div><label>Billing account id</label><input id="c_bill" placeholder="optional"></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="c_pubip" checked> Reserve public IP</label>
+      <div class="btns">
+        <button class="navy" onclick="loadMeta()">Reload options</button>
+        <button class="primary" onclick="createServers()">Create</button>
+      </div>
+      <div id="metaOut" class="hint" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ---------------- SERVERS ---------------- -->
+  <section id="p-servers" class="panel">
+    <div class="card">
+      <div class="btns" style="margin:0 0 12px">
+        <button class="navy" onclick="loadServers()">Refresh</button>
+        <button class="ghost" onclick="copySelected('ip')">Copy IP</button>
+        <button class="ghost" onclick="copySelected('proxy')">Copy Proxy</button>
+        <button class="ghost" onclick="deleteSelected()">Delete Selected</button>
+        <button class="primary" onclick="deleteAll()">Delete All (bill 0)</button>
+      </div>
+      <div id="serverStats" class="hint" style="margin-bottom:8px">Servers: --</div>
+      <div style="overflow:auto">
+      <table class="acct" id="srvTable">
+        <thead><tr>
+          <th><input type="checkbox" id="chkAll" onclick="toggleAll(this)"></th>
+          <th>Name</th><th>IP</th><th>Status</th><th>OS</th><th>Size</th>
+          <th>Proxy / RDP</th><th>Created</th>
+        </tr></thead>
+        <tbody id="srvBody"></tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------- LOGS ---------------- -->
+  <section id="p-logs" class="panel">
+    <div class="card">
+      <h3>Activity log</h3>
+      <div id="logbox" class="log"></div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="/hostzop.js"></script>
+</body>
+</html>

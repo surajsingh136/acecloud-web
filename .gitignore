@@ -3,10 +3,13 @@ spot/spot_creds.json
 spot/proxy_spot.txt
 spot/server/spot_server.txt
 spot/accounts.json
+spot/hostzop.json
 **/spot_creds.json
 **/proxy_spot.txt
 **/spot_server.txt
 **/accounts.json
+**/hostzop.json
+**/hostzop_proxy.txt
 **/spot_server_ips.txt
 **/*_ips.txt
 .env

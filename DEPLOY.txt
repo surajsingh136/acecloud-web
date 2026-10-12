@@ -40,6 +40,7 @@ STEP 2 - Deploy on Render.com
       ACEWEB_PIN      = your 4-6 digit pin (e.g. 4821)
       ACECLOUD_EMAIL  = your acecloud email
       ACECLOUD_PASSWD = your acecloud password
+      HOSTZOP_APIKEY  = (optional) your hostzop.com API key
 4. Let it deploy. You'll get a live URL:
       https://acecloud-web.onrender.com
 
@@ -55,6 +56,22 @@ HUB  /  MULTI-ACCOUNT  (/all)
   set the ACECLOUD_ACCOUNTS env var to a JSON list, e.g.:
       ACECLOUD_ACCOUNTS=[{"label":"Office","email":"a@b.com","password":"pw","api_key":""}]
 - The manager itself stays at  https://<your-app>.onrender.com/  (unchanged).
+
+--------------------------------------------------------
+HOSTZOP  (/hostzop)
+--------------------------------------------------------
+- Open  https://<your-app>.onrender.com/all  ->  click the Hostzop card (next to AceCloud).
+  It opens  https://<your-app>.onrender.com/hostzop  (Hostzop manager).
+- Hostzop uses an API key (no email/password). In the Accounts tab paste the API key
+  (create a token in the hostzop.com UI), optionally Billing account id + Location,
+  then "Verify API key" and "Save account".
+- The default hostzop account comes from the HOSTZOP_APIKEY env var (read-only).
+  Extra accounts are saved to spot/hostzop.json (ephemeral). To keep them permanently
+  set HOSTZOP_ACCOUNTS to a JSON list, e.g.:
+      HOSTZOP_ACCOUNTS=[{"label":"Main","apikey":"XXXX","billing_account_id":"129754","location":"chn01"}]
+- Create Servers tab: pick OS / size / server class / count -> creates Ubuntu Squid proxies
+  (ip:port:user:pass) or Windows RDP servers. Delete Selected / Delete All stops billing.
+- Proxy list is appended to spot/hostzop_proxy.txt (Linux) on the server.
 
 --------------------------------------------------------
 IMPORTANT NOTES

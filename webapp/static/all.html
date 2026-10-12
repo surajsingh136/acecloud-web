@@ -44,6 +44,29 @@
         <input id="aemail" placeholder="you@example.com">
         <label>Password</label>
         <input id="apass" type="password" placeholder="********">
+        <label>Default region</label>
+        <select id="aregion">
+          <option value="ap-south-mum-2">Mumbai</option>
+          <option value="ap-south-noi-1">Noida</option>
+        </select>
+
+        <button type="button" class="detectbtn" onclick="detect()">Detect required details (project &amp; networks)</button>
+        <div id="detectBox" class="detectbox">
+          <label>Project</label>
+          <select id="projSel" onchange="renderNets()"></select>
+          <div id="netBox"></div>
+        </div>
+
+        <details class="adv">
+          <summary>Required IDs (auto-filled by Detect; edit only if needed)</summary>
+          <label>Project ID</label>
+          <input id="aproj" placeholder="project id">
+          <label>Network ID - Mumbai</label>
+          <input id="anetmum" placeholder="external network id (Mumbai)">
+          <label>Network ID - Noida</label>
+          <input id="anetnoi" placeholder="external network id (Noida)">
+        </details>
+
         <label>API key (optional)</label>
         <input id="akey" placeholder="leave empty if none">
         <label>Note (optional)</label>

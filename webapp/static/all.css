@@ -84,6 +84,18 @@ table.acct tr.act{background:#f0f8ff}
 .primary{background:linear-gradient(135deg,var(--brand),var(--brand2));border:0;color:#fff}
 .err{color:var(--err);font-size:13px}
 
+.form select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+  font-size:14px;background:#fff;outline:none}
+.form select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(31,143,255,.13)}
+.detectbtn{width:100%;margin-top:14px;padding:10px 14px;border-radius:10px;cursor:pointer;
+  font-weight:700;font-size:13px;color:var(--brand);background:#eef6ff;border:1px solid #cfe4ff}
+.detectbtn:hover{background:#e0efff}
+.detectbox{display:none;margin-top:10px;padding:12px;border:1px dashed #cfe4ff;border-radius:10px;
+  background:#f8fbff}
+.adv{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.adv summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--muted)}
+.adv label{margin-top:8px}
+
 .toast{display:none;position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
   background:var(--navy);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;
   box-shadow:0 10px 30px rgba(9,20,36,.35);z-index:80}
