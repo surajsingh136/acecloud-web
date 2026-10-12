@@ -41,7 +41,7 @@ button.del:hover { background: var(--blue-hover); }
 
 /* stats + table */
 #stats { padding: 4px 12px; font-weight: bold; color: var(--navy); }
-#tblwrap { margin: 0 12px; overflow: auto; max-height: 340px; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
+#tblwrap { margin: 0 12px; overflow: auto; max-height: 62vh; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
 table { border-collapse: collapse; width: 100%; }
 th { background: var(--navy); color: #fff; padding: 7px 8px; text-align: left; font-size: 12px; position: sticky; top: 0; }
 td { padding: 6px 8px; border-bottom: 1px solid #eef3f8; font-size: 13px; }
@@ -58,7 +58,7 @@ td.st { font-weight: bold; }
 .SHUTOFF, .PAUSED, .UNKNOWN { color: #888; }
 
 /* activity log */
-#logbox { margin: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 3px; height: 180px; overflow: auto; padding: 8px; font-family: Consolas, monospace; font-size: 12.5px; }
+#logbox { margin: 14px 12px; background: #fff; border: 1px solid var(--line); border-radius: 3px; height: 170px; overflow: auto; padding: 8px; font-family: Consolas, monospace; font-size: 12.5px; }
 .l-info { color: var(--txt); }
 .l-ok { color: var(--green); }
 .l-warn { color: var(--amber); }
@@ -84,5 +84,5 @@ td.st { font-weight: bold; }
 @media (max-width: 640px) {
   .row label { min-width: 60px; }
   #banner .sub { display: none; }
-  #tblwrap { max-height: 260px; }
+  #tblwrap { max-height: 48vh; }
 }

@@ -81,7 +81,7 @@ body{
 
 .tablewrap{
   border:1px solid var(--line); border-radius:4px; overflow:auto;
-  background:#fff; max-height:46vh;
+  background:#fff; max-height:62vh;
 }
 table#srv{border-collapse:collapse; width:100%; font-size:12.5px}
 table#srv thead th{
@@ -102,7 +102,7 @@ th.chk,td.chk{width:26px; text-align:center}
 .logwrap{padding:8px 4px 0}
 .log{
   background:#fff; border:1px solid var(--line); border-radius:4px;
-  height:150px; overflow:auto; padding:6px 8px;
+  height:140px; overflow:auto; padding:6px 8px;
   font:12px/1.5 Consolas,"Courier New",monospace; color:var(--txt);
   white-space:pre-wrap;
 }
