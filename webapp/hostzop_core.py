@@ -128,6 +128,27 @@ def images(key):
     return sorted((n, sorted(vs)) for n, vs in seen.items())
 
 
+# Per-Server-Class hourly rate cards published on hostzop.com.  The billing
+# API only returns the default (AMD EPYC) policy, so Intel Gold numbers are
+# taken from the official pricing calculator.
+CLASS_RATES = {
+    "amd": {"cpu": 0.342, "ram": 0.06849, "storage": 0.00822, "win": 0.274,
+            "label": "AMD EPYC + NVMe"},
+    "intel": {"cpu": 0.205, "ram": 0.05480, "storage": 0.00480, "win": 0.274,
+              "label": "Intel Gold + SSD"},
+}
+
+
+def class_rates(name):
+    """Map a Server Class / host-pool name to its hourly rate card, or None."""
+    s = (name or "").lower()
+    if "intel" in s or "gold" in s:
+        return dict(CLASS_RATES["intel"])
+    if "amd" in s or "epyc" in s:
+        return dict(CLASS_RATES["amd"])
+    return None
+
+
 def pricing(key):
     code, data = api("GET", "/v1/pricing/policy", key)
     policy = {}
@@ -136,20 +157,32 @@ def pricing(key):
             if not isinstance(p, dict):
                 continue
             rt = p.get("resourceType")
+            up = str(p.get("serviceNameInUptime") or "").lower()
+            price = p.get("pricePerUnit")
             if rt == "CPU":
-                policy["cpu"] = p.get("pricePerUnit")
+                policy["cpu"] = price
             elif rt == "RAM":
-                policy["ram"] = p.get("pricePerUnit")
+                policy["ram"] = price
             elif rt == "STORAGE":
-                policy["storage"] = p.get("pricePerUnit")
+                if "backup" in up or "snapshot" in up:
+                    policy["snap"] = price
+                else:
+                    policy["storage"] = price
+            elif rt == "LICENSE":
+                policy["win"] = price
     return policy
 
 
-def hourly_rate(policy, cpu, ram, disks):
-    if not policy:
+def hourly_rate(policy, cpu, ram, disks, windows=False, rates=None):
+    """Hourly rate = CPU + RAM(GB) + disk(GB), + Windows licence per CPU."""
+    r = rates or policy
+    if not r:
         return None
-    return (cpu * policy.get("cpu", 0) + (ram / 1024.0) * policy.get("ram", 0)
-            + disks * policy.get("storage", 0))
+    total = (cpu * r.get("cpu", 0) + (ram / 1024.0) * r.get("ram", 0)
+             + disks * r.get("storage", 0))
+    if windows:
+        total += cpu * r.get("win", 0.274)
+    return total
 
 
 def _slugs(key):

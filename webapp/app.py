@@ -315,7 +315,7 @@ def hz_key():
     return ((active_hz() or {}).get("apikey") or "").strip()
 
 
-def hz_meta():
+def hz_meta(pool=None):
     key = hz_key()
     a = active_hz() or {}
     if not key:
@@ -323,10 +323,19 @@ def hz_meta():
                 "images": [], "sizes": [], "user": ""}
     info = hz.verify(key)
     pol = hz.pricing(key)
+    pool_list = hz.pools(key)
+    sel_name = ""
+    if pool:
+        sel_name = next((p.get("name") for p in pool_list
+                         if str(p.get("uuid")) == str(pool)), "") or ""
+    rates = hz.class_rates(sel_name) or pol
     sizes = [{"name": n, "cpu": c, "ram": r, "disk": d,
-              "rate": hz.hourly_rate(pol, c, r, d)} for n, c, r, d in hz.SIZE_CHART]
+              "rate": hz.hourly_rate(pol, c, r, d, rates=rates),
+              "rate_win": hz.hourly_rate(pol, c, r, d, windows=True, rates=rates),
+              "class": rates.get("label") if rates is not pol else ""}
+             for n, c, r, d in hz.SIZE_CHART]
     pools = [{"name": p.get("name"), "uuid": p.get("uuid"),
-              "default": bool(p.get("is_default_designated"))} for p in hz.pools(key)]
+              "default": bool(p.get("is_default_designated"))} for p in pool_list]
     flat = [{"name": n, "versions": vs} for n, vs in hz.images(key)]
     return {"ok": True, "user": info.get("user", "") if info.get("ok") else "",
             "locations": info.get("locations", []) if info.get("ok") else [],
@@ -900,7 +909,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/hostzop/meta":
-            self._json(hz_meta())
+            q = parse_qs(urlparse(self.path).query)
+            self._json(hz_meta((q.get("pool") or [""])[0]))
             return
 
         if path == "/api/hostzop/state":

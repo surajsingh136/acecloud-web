@@ -132,12 +132,21 @@ function centosVersions() {
   return c.length ? c : ["9.stream", "8.stream"];
 }
 function sizeLabel(s, win) {
-  const rate = (s.rate != null) ? " - Rs." + Number(s.rate).toFixed(2) + "/hr" : "";
+  const v = win ? (s.rate_win != null ? s.rate_win : s.rate) : s.rate;
+  const rate = (v != null) ? " - Rs." + Number(v).toFixed(2) + "/hr" : "";
   return `${s.name} - ${s.cpu} vCPU/${s.ram / 1024}GB/${s.disk}GB${rate}${win ? " [WinLic]" : ""}`;
 }
 function fillSizes(win) {
   const sizes = META.sizes || [];
   $("c_size").innerHTML = sizes.map((s, i) => `<option value="${i}">${esc(sizeLabel(s, win))}</option>`).join("");
+}
+async function refreshSizes() {
+  const pool = $("c_pool") ? $("c_pool").value : "";
+  const sel = $("c_size") ? $("c_size").value : "0";
+  let d; try { d = await J("/api/hostzop/meta" + (pool ? "?pool=" + encodeURIComponent(pool) : "")); } catch (e) { return; }
+  if (d && d.sizes) META.sizes = d.sizes;
+  fillSizes($("c_os").value === "Windows Server");
+  if ($("c_size") && $("c_size").options.length) $("c_size").value = sel;
 }
 function onOsChange() {
   const os = $("c_os").value;
@@ -165,6 +174,7 @@ async function loadMeta() {
     : '<option value="">(account default)</option>';
   if (d.billing_account_id) $("c_bill").value = d.billing_account_id;
   onOsChange();
+  refreshSizes();
   loadTemplates();
 }
 function osVersionsItems() { return []; }
@@ -337,6 +347,7 @@ async function pollBalance() {
 /* ---------------- init ---------------- */
 function wire() {
   $("c_os").addEventListener("change", onOsChange);
+  $("c_pool").addEventListener("change", refreshSizes);
   $("c_tpl").addEventListener("change", () => { /* template selected */ });
   $("hz_acct").addEventListener("change", acctChanged);
   $("btn_keys").addEventListener("click", keyModal);
