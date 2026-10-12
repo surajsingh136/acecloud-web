@@ -69,14 +69,22 @@ def plan_timer(plans, name, created_api):
         return "plan: -"
 
 
-def fetch_ondemand_price(flavor_name):
+def fetch_ondemand_price(flavor_name, os_type="linux"):
+    """On-demand (hourly) INR price for a flavor name.
+    The pricing table (is_spot=true) returns BOTH fields on the same flavor row:
+      price_per_spot = spot rate, price_per_hour = on-demand rate.
+    (The is_spot=false list uses generic names like C.1/M.4, so it can't be matched.)"""
+    mod = sw if os_type == "windows" else ac
     try:
-        rows = ac.api_data("GET", "cloud/pricing",
-                           params={"resource": "instances", "is_gpu": "false",
-                                   "is_spot": "false"}) or []
+        rows = mod.api_data("GET", "cloud/pricing",
+                            params={"resource": "instances", "is_gpu": "false",
+                                    "is_spot": "true", "num_instances": "1",
+                                    "currency": "INR", "os_type": os_type}) or []
         for x in rows:
             if (x.get("resource_name") or "") == flavor_name:
-                return x.get("price_per_hour")
+                p = x.get("price_per_hour")
+                if p:
+                    return float(p)
     except Exception:
         pass
     return None

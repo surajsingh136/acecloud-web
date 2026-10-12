@@ -559,7 +559,7 @@ def job_create_win(region, base, size_idx, count, hours, billing):
         push(f"CREATE WIN: {region} | {size['flavor']} | x{count} | {hours}h | "
              f"{billing.upper()} | base={base}", "sys")
         price = (sw.get_spot_price(size["flavor"], size["price"]) if billing == "spot"
-                 else (fetch_ondemand_price(size["flavor"]) or size["price"]))
+                 else (fetch_ondemand_price(size["flavor"], "windows") or size["price"]))
         push(f"Price {size['flavor']}: Rs.{price}/hr", "ok")
         sg = sw.ensure_sg()
         auto_pass = sw.gen_password()
@@ -650,7 +650,7 @@ def job_create_proxy(code, size_idx, count, hours, port, user, pwd, billing_lbl)
         push(f"CREATE PROXY: {ac.REGIONS[code]['label']} | {sel['name']} | "
              f"x{count} | {hours}h | {billing.upper()}", "sys")
         price = (ac.get_spot_price(sel["name"]) if billing == "spot"
-                 else (fetch_ondemand_price(sel["name"]) or sel["price"]))
+                 else (fetch_ondemand_price(sel["name"], "linux") or sel["price"]))
         push(f"Price {sel['name']}: Rs.{price}/hr", "ok")
         sg = ac.ensure_sg(port)
         ud_b64 = base64.b64encode(ac.build_user_data(user, pwd, port).encode()).decode()
@@ -800,7 +800,7 @@ def get_sizes(type_, region, billing):
         ac.REGION = code
         is_spot = billing.startswith("SPOT")
         for s in ac.build_linux_sizes(code):
-            p = s["price"] if is_spot else (fetch_ondemand_price(s["name"]) or s["price"])
+            p = s["price"] if is_spot else (fetch_ondemand_price(s["name"], "linux") or s["price"])
             unit = "SPOT" if is_spot else "ON-DEMAND"
             out["sizes"].append(
                 f"{s['n']}) {s['name']} - {s['vcpu']}vCPU/{s['ram']}GB - INR {p:,.2f}/hr {unit}")
@@ -810,7 +810,7 @@ def get_sizes(type_, region, billing):
         sw.build_region(code)
         is_spot = billing.startswith("SPOT")
         for s in list(sw.SIZES):
-            p = s["price"] if is_spot else (fetch_ondemand_price(s["flavor"]) or s["price"])
+            p = s["price"] if is_spot else (fetch_ondemand_price(s["flavor"], "windows") or s["price"])
             unit = "SPOT" if is_spot else "ON-DEMAND"
             out["sizes"].append(
                 f"{s['n']}) {s['flavor']} - {s['vcpu']}vCPU/{s['ram']}GB - INR {p:,.2f}/hr {unit}")
