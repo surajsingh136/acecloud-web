@@ -192,6 +192,81 @@ def networks(key, slug=None):
     return _list("GET", f"{_pref(slug)}/network/networks", key)
 
 
+def balance(key, bill=""):
+    """Credit / used / ongoing / unpaid for the billing account (status bar)."""
+    key = (key or "").strip()
+    credit = ongoing = used = unpaid = None
+    code, data = api("GET", "/v1/payment/billing_account/list", key)
+    if code == 200 and isinstance(data, list):
+        for ba in data:
+            if isinstance(ba, dict) and ba.get("is_default"):
+                credit = ba.get("credit_amount")
+                rt = ba.get("running_totals") or {}
+                ongoing = rt.get("ongoing")
+                used = rt.get("subtotal_resource_usage") or rt.get("subtotal")
+    code, data = api("GET", "/v1/payment/billing_account/unpaid_amount", key,
+                     params={"billing_account_id": bill or ""})
+    if code == 200 and isinstance(data, dict):
+        unpaid = data.get("message")
+
+    def num(x):
+        try:
+            return float(x)
+        except Exception:
+            return None
+
+    return {"ok": True, "ongoing": num(ongoing), "credit": num(credit),
+            "used": num(used), "unpaid": num(unpaid)}
+
+
+def test_proxy(line):
+    """Try the proxy against Google + IRCTC (server side, like the desktop)."""
+    line = (line or "").strip()
+    try:
+        host, port, user, pw = line.split(":", 3)
+        port = int(port)
+    except Exception:
+        return {"ok": False, "msg": "Format: ip:port:user:pass", "results": []}
+    px = f"http://{user}:{pw}@{host}:{port}"
+    proxies = {"http": px, "https": px}
+    results = []
+    for name, url in [("IRCTC", "https://www.irctc.co.in"), ("Google", "https://www.google.com")]:
+        try:
+            r = requests.get(url, proxies=proxies, timeout=25, allow_redirects=True)
+            results.append({"name": name, "ok": True, "code": r.status_code,
+                            "ms": int(r.elapsed.total_seconds() * 1000)})
+        except Exception as e:
+            results.append({"name": name, "ok": False, "msg": f"{type(e).__name__} {str(e)[:80]}"})
+    return {"ok": True, "results": results}
+
+
+def _find_snap_uuid(resp):
+    if isinstance(resp, dict):
+        if resp.get("type") == "snapshot" and resp.get("uuid"):
+            return resp["uuid"]
+        repl = resp.get("replica")
+        if isinstance(repl, list) and repl and isinstance(repl[0], dict):
+            return repl[0].get("uuid")
+        stor = resp.get("storage")
+        if isinstance(stor, list):
+            for d in stor:
+                if isinstance(d, dict):
+                    rr = d.get("replica")
+                    if isinstance(rr, list) and rr and isinstance(rr[0], dict):
+                        return rr[0].get("uuid")
+    if isinstance(resp, list):
+        for item in resp:
+            u = _find_snap_uuid(item)
+            if u:
+                return u
+    return None
+
+
+def make_snapshot(key, vm_uuid):
+    code, resp = api("POST", "/v1/user-resource/vm/replica", key, data={"uuid": vm_uuid})
+    return {"code": code, "resp": resp, "replica_uuid": _find_snap_uuid(resp)}
+
+
 def verify(key):
     """Validate the apikey and gather what the UI needs. Never raises."""
     key = (key or "").strip()
@@ -270,6 +345,8 @@ def ensure_network(key, name, slug=None):
 
 def _create_one(key, cfg, name, pool_uuid, os_name, os_version, network_uuid, slug=None):
     is_win = os_name == "windows"
+    tpl = cfg.get("template") or {}
+    username = str(cfg.get("username") or ("Administrator" if is_win else "root"))
     data = {
         "name": name,
         "os_name": os_name,
@@ -277,12 +354,15 @@ def _create_one(key, cfg, name, pool_uuid, os_name, os_version, network_uuid, sl
         "disks": cfg["disks"],
         "vcpu": cfg["vcpu"],
         "ram": cfg["ram"],
-        "username": "Administrator" if is_win else "root",
+        "username": username,
         "password": cfg["root_password"],
         "network_uuid": network_uuid,
         "reserve_public_ip": "True" if cfg.get("reserve_public_ip", True) else "False",
     }
-    if not is_win:
+    if tpl and (tpl.get("replica_uuid") or tpl.get("source_replica")):
+        data["source_uuid"] = tpl.get("vm_uuid") or tpl.get("source_uuid")
+        data["source_replica"] = tpl.get("replica_uuid") or tpl.get("source_replica")
+    elif not is_win:
         data["cloud_init"] = json.dumps(_build_cloud_init(cfg))
     if pool_uuid:
         data["designated_pool_uuid"] = pool_uuid
@@ -330,8 +410,22 @@ def create_proxies(key, cfg, count):
     me = user_info(key)
     log(f"Hostzop user: {me.get('name', '?')}", "sys")
 
-    os_name = "windows" if str(cfg.get("os_name", "")).lower().startswith("win") else "ubuntu"
-    os_version = str(cfg.get("os_version") or ("2022" if os_name == "windows" else "22.04"))
+    raw_os = str(cfg.get("os_name", "")).lower()
+    if raw_os.startswith("win"):
+        os_name = "windows"
+    elif raw_os.startswith("cent"):
+        os_name = "centos"
+    else:
+        os_name = "ubuntu"
+    os_version = str(cfg.get("os_version") or "").strip()
+    if not os_version:
+        if os_name == "windows":
+            os_version = "2022"
+        elif os_name == "centos":
+            vs = [v for n, vv in images(key) for v in vv if str(n).lower() == "centos"]
+            os_version = vs[-1] if vs else "9"
+        else:
+            os_version = "22.04"
     if os_name == "ubuntu" and os_version and "." not in os_version:
         os_version = os_version + ".04"
 

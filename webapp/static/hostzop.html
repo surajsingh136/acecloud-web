@@ -1,136 +1,119 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HOSTZOP Manager</title>
+<title>Hostzop Proxy Maker</title>
 <link rel="stylesheet" href="/hostzop.css">
 </head>
 <body>
-<header class="topbar">
-  <img class="brandlogo" src="/hostzop-logo.svg" alt="HOSTZOP">
-  <div class="brandtxt">
-    <div class="brandtitle">HOSTZOP MANAGER</div>
-    <div class="brandsub">Proxy &amp; server maker via API key</div>
+
+<header class="banner">
+  <div class="banner-l">
+    <span class="brand">HOSTZOP</span>
+    <span class="brand2">PROXY MAKER &nbsp;|&nbsp; Dashboard</span>
   </div>
-  <div class="spacer"></div>
-  <a class="linkbtn" href="/all">Hub</a>
-  <a class="linkbtn" href="/">AceCloud</a>
+  <div class="banner-r">
+    <select id="hz_acct" class="acctsel" title="Hostzop account"></select>
+    <button id="btn_keys" class="btn ghosty">Keys</button>
+    <span class="tag">cherrypick servers&nbsp;&nbsp;|&nbsp;&nbsp;apikey auto&nbsp;&nbsp;|&nbsp;&nbsp;bill 0 after delete</span>
+  </div>
 </header>
 
-<main>
-  <div class="tabs">
-    <div class="tab on" data-t="accounts" onclick="showTab('accounts')">Accounts</div>
-    <div class="tab" data-t="create" onclick="showTab('create')">Create Servers</div>
-    <div class="tab" data-t="servers" onclick="showTab('servers')">Servers</div>
-    <div class="tab" data-t="logs" onclick="showTab('logs')">Logs</div>
-  </div>
+<main class="wrap">
 
-  <!-- ---------------- ACCOUNTS ---------------- -->
-  <section id="p-accounts" class="panel on">
-    <div class="card">
-      <h3>Hostzop accounts</h3>
-      <div id="activeInfo" class="activeInfo">Active account: -</div>
-      <div id="acclist"></div>
+  <section class="panel ctrl">
+    <div class="row">
+      <label>Name:</label>
+      <input id="c_name" class="in" value="hzproxy">
+      <label class="gap">Count:</label>
+      <input id="c_count" class="in c-sm" type="number" min="1" max="100" value="1">
+      <label class="gap">OS:</label>
+      <select id="c_os" class="in">
+        <option>Ubuntu</option>
+        <option>CentOS</option>
+        <option>Windows Server</option>
+      </select>
+      <label class="gap">Ver:</label>
+      <select id="c_ver" class="in c-xs"></select>
     </div>
 
-    <div class="card">
-      <h3 id="formTitle">Add account</h3>
-      <p class="hint">Hostzop uses an <b>API key</b> (no email/password). Create a token in the
-        Hostzop UI, paste it below. Billing account id and location are optional.</p>
-      <div class="grid2">
-        <div><label>Label</label><input id="alabel" placeholder="e.g. Office"></div>
-        <div><label>API key (required)</label><input id="akey" placeholder="your hostzop api key"></div>
-        <div><label>Billing account id (optional)</label><input id="abill" placeholder="e.g. 129754"></div>
-        <div><label>Default location (optional)</label>
-          <select id="aloc"><option value="">(default)</option></select></div>
-      </div>
-      <label>Note (optional)</label>
-      <input id="anote" placeholder="">
-      <label class="chk"><input type="checkbox" id="ause" checked> Use this account now</label>
-      <div class="btns">
-        <button class="ghost" onclick="verifyKey()">Verify API key</button>
-        <button class="ghost" onclick="resetForm()">Clear</button>
-        <button class="primary" onclick="saveAccount()">Save account</button>
-      </div>
-      <div id="verifyOut" class="hint" style="margin-top:10px"></div>
+    <div class="row">
+      <label>Template (snapshot):</label>
+      <select id="c_tpl" class="in wide"></select>
     </div>
-  </section>
 
-  <!-- ---------------- CREATE ---------------- -->
-  <section id="p-create" class="panel">
-    <div class="card">
-      <h3>Create proxy / server</h3>
-      <p class="hint">Ubuntu installs a Squid proxy (ip:port:user:pass). Windows makes an RDP
-        server (ip:3389:Administrator:password).</p>
-      <div class="grid3">
-        <div><label>OS</label>
-          <select id="c_os" onchange="onOsChange()">
-            <option value="ubuntu">Ubuntu (proxy)</option>
-            <option value="centos">CentOS (proxy)</option>
-            <option value="windows">Windows Server (RDP)</option>
-          </select></div>
-        <div><label>Version</label><select id="c_ver"></select></div>
-        <div><label>Count</label><input id="c_count" value="1"></div>
-      </div>
-      <div class="grid3">
-        <div><label>Size</label><select id="c_size"></select></div>
-        <div><label>Server class (pool)</label><select id="c_pool"></select></div>
-        <div><label>Instance name</label><input id="c_name" value="hzproxy"></div>
-      </div>
-      <div class="grid3">
-        <div><label>Network name</label><input id="c_net" value="My Network"></div>
-        <div><label>Proxy user</label><input id="c_user" value="ajay"></div>
-        <div><label>Proxy pass</label><input id="c_pass" value="ajay"></div>
-      </div>
-      <div class="grid3">
-        <div><label>Proxy port</label><input id="c_port" value="3128"></div>
-        <div><label>Root password</label><input id="c_root" value="Rr@123456"></div>
-        <div><label>Billing account id</label><input id="c_bill" placeholder="optional"></div>
-      </div>
-      <label class="chk"><input type="checkbox" id="c_pubip" checked> Reserve public IP</label>
-      <div class="btns">
-        <button class="navy" onclick="loadMeta()">Reload options</button>
-        <button class="primary" onclick="createServers()">Create</button>
-      </div>
-      <div id="metaOut" class="hint" style="margin-top:10px"></div>
+    <div class="row">
+      <label>Server Class:</label>
+      <select id="c_pool" class="in c-mid"></select>
+      <label class="gap">Size:</label>
+      <select id="c_size" class="in wide"></select>
+    </div>
+
+    <div class="row">
+      <label>Proxy User:</label>
+      <input id="c_user" class="in" value="ajay">
+      <label class="gap">Proxy Pass:</label>
+      <input id="c_pass" class="in" value="ajay">
+      <label class="gap">Root Pass:</label>
+      <input id="c_root" class="in" value="">
+      <input id="c_net" class="in hidden" value="My Network">
+      <input id="c_bill" class="in hidden" value="">
+    </div>
+
+    <div class="btns">
+      <button id="btn_create" class="btn create">Create Proxies</button>
+      <button id="btn_delall" class="btn del">Delete All (bill 0)</button>
+      <button id="btn_snap" class="btn">Snapshot</button>
+      <button id="btn_test" class="btn">Test Proxy</button>
+      <button id="btn_open" class="btn">Open Output</button>
+    </div>
+
+    <div class="row">
+      <label>Proxy test (ip:port:user:pass):</label>
+      <input id="c_testline" class="in wide">
     </div>
   </section>
 
-  <!-- ---------------- SERVERS ---------------- -->
-  <section id="p-servers" class="panel">
-    <div class="card">
-      <div class="btns" style="margin:0 0 12px">
-        <button class="navy" onclick="loadServers()">Refresh</button>
-        <button class="ghost" onclick="copySelected('ip')">Copy IP</button>
-        <button class="ghost" onclick="copySelected('proxy')">Copy Proxy</button>
-        <button class="ghost" onclick="deleteSelected()">Delete Selected</button>
-        <button class="primary" onclick="deleteAll()">Delete All (bill 0)</button>
+  <section class="panel">
+    <div class="toolbar">
+      <span id="stats" class="stats">Servers: --</span>
+      <div class="tb-r">
+        <button id="btn_refresh" class="btn sm">Refresh</button>
+        <button id="btn_copyip" class="btn sm">Copy IP</button>
+        <button id="btn_copyproxy" class="btn sm">Copy Proxy</button>
+        <button id="btn_delsel" class="btn sm del">Delete Selected</button>
       </div>
-      <div id="serverStats" class="hint" style="margin-bottom:8px">Servers: --</div>
-      <div style="overflow:auto">
-      <table class="acct" id="srvTable">
-        <thead><tr>
-          <th><input type="checkbox" id="chkAll" onclick="toggleAll(this)"></th>
-          <th>Name</th><th>IP</th><th>Status</th><th>OS</th><th>Size</th>
-          <th>Proxy / RDP</th><th>Created</th>
-        </tr></thead>
+    </div>
+    <div class="tablewrap">
+      <table id="srv">
+        <thead>
+          <tr>
+            <th class="chk"></th><th>Name</th><th>IP</th><th>Status</th>
+            <th>OS</th><th>Size</th><th>Proxy</th><th>Created</th>
+          </tr>
+        </thead>
         <tbody id="srvBody"></tbody>
       </table>
-      </div>
     </div>
   </section>
 
-  <!-- ---------------- LOGS ---------------- -->
-  <section id="p-logs" class="panel">
-    <div class="card">
-      <h3>Activity log</h3>
-      <div id="logbox" class="log"></div>
-    </div>
+  <section class="logwrap">
+    <div id="log" class="log"></div>
   </section>
+
 </main>
 
-<div class="toast" id="toast"></div>
+<footer class="statusbar"><span id="balance">Balance: -- &nbsp;|&nbsp; Unpaid: --</span></footer>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head"><span id="modal-title">Title</span><button id="modal-x" class="btn sm">X</button></div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
 <script src="/hostzop.js"></script>
 </body>
 </html>

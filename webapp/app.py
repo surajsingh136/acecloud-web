@@ -368,6 +368,48 @@ def job_hz_delete(uuids, is_all):
         end()
 
 
+HZ_SNAPS_FILE = SPOT_DIR / "hostzop_snaps.json"
+
+
+def load_hz_snaps():
+    try:
+        if HZ_SNAPS_FILE.exists():
+            data = json.loads(HZ_SNAPS_FILE.read_text("utf-8"))
+            return data if isinstance(data, list) else []
+    except Exception:
+        pass
+    return []
+
+
+def save_hz_snaps(snaps):
+    try:
+        HZ_SNAPS_FILE.write_text(json.dumps(snaps, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def job_hz_snapshot(vm_uuid, vm_name, name):
+    try:
+        key = hz_key()
+        push(f"Taking snapshot of {vm_name or vm_uuid} ...", "sys")
+        res = hz.make_snapshot(key, vm_uuid)
+        push(f"create replica: HTTP {res.get('code')}", "info")
+        ru = res.get("replica_uuid")
+        if not ru:
+            push("Replica UUID not returned - snapshot may have failed", "warn")
+            return
+        snaps = load_hz_snaps()
+        snaps.append({"name": name or (str(vm_name or "vm") + " snapshot"),
+                      "replica_uuid": ru, "vm_uuid": vm_uuid, "vm_name": vm_name or "",
+                      "date": time.strftime("%Y-%m-%d %H:%M:%S")})
+        save_hz_snaps(snaps)
+        push(f"Snapshot saved: {snaps[-1]['name']}", "ok")
+    except BaseException as e:
+        push(f"HOSTZOP SNAPSHOT ERROR: {e}", "error")
+    finally:
+        end()
+
+
 def detect_account(email, password):
     """Temporary login in a SEPARATE session -> this account's projects + networks.
     Does NOT touch the active session of the running account."""
@@ -865,6 +907,27 @@ class Handler(BaseHTTPRequestHandler):
             self._json(hz.state(hz_key()))
             return
 
+        if path == "/api/hostzop/balance":
+            self._json(hz.balance(hz_key(), (active_hz() or {}).get("billing_account_id") or ""))
+            return
+
+        if path == "/api/hostzop/snaps":
+            self._json({"snaps": load_hz_snaps()})
+            return
+
+        if path == "/api/hostzop/output":
+            q = parse_qs(urlparse(self.path).query)
+            fn = "windows.txt" if (q.get("file") or ["proxy"])[0] == "windows" else "hostzop_proxy.txt"
+            p = SPOT_DIR / fn
+            txt = ""
+            if p.exists():
+                try:
+                    txt = p.read_text("utf-8", errors="replace")
+                except Exception:
+                    txt = ""
+            self._json({"file": fn, "text": txt})
+            return
+
         if path == "/api/state":
             plans = load_plans()
             rows, counts = [], {"spot": 0, "ondemand": 0, "proxy": 0, "active": 0, "total": 0}
@@ -1145,6 +1208,27 @@ class Handler(BaseHTTPRequestHandler):
                 return
             threading.Thread(target=job_hz_delete, daemon=True,
                              args=(b.get("uuids") or [], bool(b.get("all")))).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/hostzop/testproxy":
+            self._json(hz.test_proxy(b.get("line") or ""))
+            return
+
+        if path == "/api/hostzop/snapshot":
+            if not hz_key():
+                self._json({"ok": False, "msg": "No hostzop account"}, 400)
+                return
+            vm_uuid = (b.get("vm_uuid") or "").strip()
+            if not vm_uuid:
+                self._json({"ok": False, "msg": "vm_uuid required"}, 400)
+                return
+            if not begin():
+                self._json({"ok": False, "msg": "Busy..."}, 409)
+                return
+            threading.Thread(target=job_hz_snapshot, daemon=True,
+                             args=(vm_uuid, (b.get("vm_name") or "").strip(),
+                                   (b.get("name") or "").strip())).start()
             self._json({"ok": True})
             return
 
