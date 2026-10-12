@@ -198,26 +198,38 @@ def build_user_data(cfg):
             .replace("__PROXY_PASS__", str(cfg.get("proxy_pass") or "")))
 
 
+def _num(v):
+    """Best-effort cast to int (the API rejects numeric fields sent as strings)."""
+    if v is None or str(v).strip() == "":
+        return None
+    try:
+        return int(str(v).strip())
+    except Exception:
+        return v
+
+
 def create_vm(key, cfg, name, image_id, instance_type, disk_gib, subnet_id, zone_id,
               template=None, windows=False):
     data = {
         "name": name,
-        "zone_id": zone_id,
+        "zone_id": _num(zone_id),
         "allocate_public_ipv4": True,
-        "subnet_id": subnet_id,
-        "image_id": image_id,
+        "image_id": _num(image_id),
         "instance_type": instance_type,
-        "root_volume": {"name": name + "-root", "size_gib": int(disk_gib), "zone_id": zone_id},
+        "root_volume": {"name": name + "-root", "size_gib": _num(disk_gib), "zone_id": _num(zone_id)},
         "root_password": cfg.get("root_password", ""),
     }
+    sub = _num(subnet_id)
+    if sub is not None:
+        data["subnet_id"] = sub
     if template and template.get("snapshot_id"):
-        data["root_volume"]["source_snapshot_id"] = int(template["snapshot_id"])
+        data["root_volume"]["source_snapshot_id"] = _num(template["snapshot_id"])
     if not windows:
         data["user_data"] = build_user_data(cfg)
     if cfg.get("ssh_pubkey"):
         data["ssh_pubkey"] = cfg["ssh_pubkey"]
     if cfg.get("security_group_ids"):
-        data["security_group_ids"] = cfg["security_group_ids"]
+        data["security_group_ids"] = [_num(x) for x in cfg["security_group_ids"]]
     return api("POST", "/compute/create", key, json=data)
 
 
