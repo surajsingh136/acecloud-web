@@ -808,7 +808,7 @@ def get_sizes(type_, region, billing):
     else:
         sw.REGION = code
         sw.build_region(code)
-        is_spot = type_ == "Windows Spot"
+        is_spot = billing.startswith("SPOT")
         for s in list(sw.SIZES):
             p = s["price"] if is_spot else (fetch_ondemand_price(s["flavor"]) or s["price"])
             unit = "SPOT" if is_spot else "ON-DEMAND"
@@ -1012,8 +1012,7 @@ class Handler(BaseHTTPRequestHandler):
                     b.get("user", "ajay") or "ajay", b.get("pass") or "ajay",
                     b.get("billing", "SPOT (cheap)"))).start()
             else:
-                # GUI rule: Windows Spot -> spot, Normal Instance -> hourly
-                billing = "spot" if t == "Windows Spot" else "hourly"
+                billing = "spot" if (b.get("billing") or "").startswith("SPOT") else "hourly"
                 threading.Thread(target=job_create_win, daemon=True, args=(
                     b.get("region", "Mumbai"), b.get("base", "Windows 2022 (image)"),
                     int(b.get("size_idx", 0)), int(b.get("count", 1)),
