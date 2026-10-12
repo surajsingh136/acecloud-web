@@ -332,6 +332,8 @@ def create_proxies(key, cfg, count):
 
     os_name = "windows" if str(cfg.get("os_name", "")).lower().startswith("win") else "ubuntu"
     os_version = str(cfg.get("os_version") or ("2022" if os_name == "windows" else "22.04"))
+    if os_name == "ubuntu" and os_version and "." not in os_version:
+        os_version = os_version + ".04"
 
     pool_uuid = cfg.get("designated_pool_uuid") or ""
     if not pool_uuid:

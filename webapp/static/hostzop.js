@@ -139,8 +139,7 @@ function osVersions(os) {
   if (os === "windows") return ["2019", "2022", "2025"];
   if (os === "ubuntu") {
     const vs = find("ubuntu");
-    const majors = ["20", "22", "24"].filter(m => vs.some(v => String(v).startsWith(m + ".")));
-    return majors.length ? majors : ["20", "22", "24"];
+    return vs.length ? vs : ["22.04", "20.04", "24.04"];
   }
   return find(os).length ? find(os) : ["8"];
 }
@@ -148,7 +147,7 @@ function onOsChange() {
   const os = $("c_os").value;
   const vers = osVersions(os);
   $("c_ver").innerHTML = vers.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
-  if (os === "ubuntu" && vers.includes("22")) $("c_ver").value = "22";
+  if (os === "ubuntu" && vers.includes("22.04")) $("c_ver").value = "22.04";
   if (os === "windows") $("c_ver").value = vers.includes("2022") ? "2022" : vers[0];
 }
 
