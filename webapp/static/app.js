@@ -65,7 +65,7 @@ async function pollState() {
       <td>${esc(r.name)}</td><td>${esc(r.ip)}</td><td>${esc(r.size)}</td>
       <td>${esc(r.region_label)}</td><td class="${esc(r.type)}">${esc(r.type)}</td>
       <td>${esc(r.pricing)}</td><td>${esc(r.plan)}</td>
-    </tr>`).join("") || `<tr><td colspan="9" style="text-align:center;color:#8a97a3;padding:36px;font-size:17px">No instances (or not logged in)</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="9" style="text-align:center;color:#8a97a3;padding:56px;font-size:26px">No instances (or not logged in)</td></tr>`;
 
   $("stats").textContent = `Servers: ${d.counts.total}   |   SPOT: ${d.counts.spot}   |   ON-DEMAND: ${d.counts.ondemand}   |   PROXY: ${d.counts.proxy}`;
   const bal = d.balance == null ? "Balance: --" : `Balance: Rs.${(+d.balance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;

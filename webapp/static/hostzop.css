@@ -96,7 +96,7 @@ table#srv tbody tr.sel{background:var(--navy) !important; color:#fff}
 table#srv tbody tr:hover{background:#DDE8F2}
 table#srv tbody tr.sel:hover{background:var(--navy)}
 th.chk,td.chk{width:26px; text-align:center}
-.empty{color:#8a97a3; padding:36px; text-align:center; font-size:17px}
+.empty{color:#8a97a3; padding:56px; text-align:center; font-size:26px}
 
 /* ---------- log ---------- */
 .logwrap{padding:8px 4px 0}
