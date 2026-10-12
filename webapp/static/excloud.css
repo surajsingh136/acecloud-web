@@ -1,0 +1,163 @@
+:root{
+  --navy:#0B4672; --navy2:#124E7E; --orange:#E74E37; --orange2:#F05A43;
+  --soft:#F4F7FA; --white:#fff; --txt:#444; --line:#BFD0DE;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--soft); color:var(--txt);
+  font:13px/1.45 "Segoe UI",system-ui,Arial,sans-serif;
+}
+.hidden{display:none !important}
+
+/* ---------- banner ---------- */
+.banner{
+  background:var(--navy); color:#fff; height:52px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:0 16px; gap:12px;
+}
+.banner-l{display:flex; align-items:baseline; gap:10px; min-width:0}
+.brand{font-size:20px; font-weight:800; letter-spacing:1px}
+.brand2{font-size:15px; font-weight:700}
+.banner-r{display:flex; align-items:center; gap:10px}
+.tag{color:var(--orange); font-size:11px; font-weight:700; white-space:nowrap}
+.acctsel{
+  background:var(--navy2); color:#fff; border:1px solid #2b6aa0;
+  border-radius:4px; padding:4px 6px; font-size:12px; max-width:190px;
+}
+.ghosty{
+  background:transparent; color:#fff; border:1px solid rgba(255,255,255,.55);
+  padding:4px 10px; border-radius:4px; font-size:12px; cursor:pointer;
+}
+.ghosty:hover{background:rgba(255,255,255,.14)}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1040px; margin:0 auto; padding:12px 14px 60px}
+.panel{
+  background:var(--soft);
+  padding:10px 4px 4px;
+}
+.row{
+  display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+  margin-bottom:9px;
+}
+.row label{color:var(--navy); font-weight:700; font-size:12px}
+.gap{margin-left:14px}
+
+.in{
+  background:#fff; color:var(--txt); border:1px solid var(--line);
+  border-radius:3px; padding:5px 7px; font-size:12.5px; min-width:110px;
+}
+.in:focus{outline:none; border-color:var(--orange)}
+.in.c-sm{width:56px; min-width:56px}
+.in.c-xs{width:72px; min-width:72px}
+.in.c-mid{width:230px}
+.in.wide{flex:1; min-width:260px}
+.in:disabled{background:#E9EEF3; color:#A0AAB4}
+
+/* ---------- buttons ---------- */
+.btns{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px}
+.btn{
+  background:#fff; color:var(--navy); border:1px solid var(--navy);
+  border-radius:4px; padding:7px 13px; font-size:12.5px; font-weight:700;
+  cursor:pointer;
+}
+.btn:hover{background:var(--soft)}
+.btn:active{background:var(--navy2); color:#fff}
+.btn:disabled{opacity:.5; cursor:default}
+.btn.create{background:var(--orange); color:#fff; border-color:var(--orange)}
+.btn.create:hover{background:var(--orange2)}
+.btn.del{background:var(--navy); color:#fff; border-color:var(--navy)}
+.btn.del:hover{background:var(--navy2)}
+.btn.sm{padding:5px 10px; font-size:12px}
+
+/* ---------- table ---------- */
+.toolbar{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px; margin:4px 0 6px;
+}
+.stats{color:var(--navy); font-weight:700; font-size:12.5px}
+.tb-r{display:flex; gap:7px; flex-wrap:wrap}
+
+.tablewrap{
+  border:1px solid var(--line); border-radius:4px; overflow:auto;
+  background:#fff; min-height:240px; max-height:62vh;
+}
+table#srv{border-collapse:collapse; width:100%; font-size:12.5px}
+table#srv thead th{
+  position:sticky; top:0; z-index:1;
+  background:var(--navy); color:#fff; font-weight:700; text-align:left;
+  padding:8px 8px; white-space:nowrap;
+}
+table#srv tbody td{padding:7px 8px; border-bottom:1px solid #E3EBF2; white-space:nowrap}
+table#srv tbody tr:nth-child(odd){background:#EEF3F8}
+table#srv tbody tr:nth-child(even){background:#fff}
+table#srv tbody tr.sel{background:var(--navy) !important; color:#fff}
+table#srv tbody tr:hover{background:#DDE8F2}
+table#srv tbody tr.sel:hover{background:var(--navy)}
+th.chk,td.chk{width:26px; text-align:center}
+.empty{color:#8a97a3; text-align:center; height:238px; vertical-align:middle}
+
+/* ---------- log ---------- */
+.logwrap{padding:8px 4px 0}
+.log{
+  background:#fff; border:1px solid var(--line); border-radius:4px;
+  height:140px; overflow:auto; padding:6px 8px;
+  font:12px/1.5 Consolas,"Courier New",monospace; color:var(--txt);
+  white-space:pre-wrap;
+}
+.log div.o{color:#1a7f37}
+.log div.e{color:#c0392b}
+.log div.w{color:#b7791f}
+.log div.s{color:var(--navy); font-weight:700}
+
+/* ---------- status bar ---------- */
+.statusbar{
+  position:fixed; left:0; right:0; bottom:0;
+  background:var(--navy); color:#fff; padding:6px 14px; font-size:12px;
+}
+
+/* ---------- toast ---------- */
+.toast{
+  display:none; position:fixed; right:16px; bottom:46px; z-index:50;
+  background:#222; color:#fff; padding:9px 14px; border-radius:5px;
+  font-size:12.5px; box-shadow:0 4px 16px rgba(0,0,0,.25); max-width:80vw;
+}
+
+/* ---------- modal ---------- */
+.modal{position:fixed; inset:0; background:rgba(11,70,114,.4); z-index:60;
+  display:flex; align-items:center; justify-content:center; padding:16px}
+.modal-box{
+  background:var(--soft); border-radius:6px; min-width:320px; max-width:760px;
+  width:100%; max-height:86vh; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.35);
+}
+.modal-head{
+  background:var(--navy); color:#fff; padding:10px 14px;
+  display:flex; align-items:center; justify-content:space-between; font-weight:700;
+}
+.modal-body{padding:14px}
+.modal-body label{display:block; color:var(--navy); font-weight:700; font-size:12px; margin:8px 0 3px}
+.modal-body .in{width:100%}
+.modal-body .mono{font:12px/1.5 Consolas,monospace; white-space:pre-wrap;
+  background:#fff; border:1px solid var(--line); border-radius:4px; padding:8px; max-height:50vh; overflow:auto}
+
+/* ---------- account table (Keys modal) ---------- */
+table.acct{border-collapse:collapse; width:100%; font-size:12.5px}
+table.acct th{background:var(--navy); color:#fff; text-align:left; padding:7px 8px}
+table.acct td{padding:6px 8px; border-bottom:1px solid #E3EBF2}
+table.acct tr.act td{background:#EAF2FA}
+.mini{background:#fff; color:var(--navy); border:1px solid var(--navy);
+  border-radius:3px; padding:3px 8px; font-size:11.5px; cursor:pointer}
+.mini:hover{background:var(--soft)}
+.mini.del{color:#fff; background:var(--navy); border-color:var(--navy)}
+.dot{display:inline-block; width:10px; height:10px; border-radius:50%;
+  background:var(--orange); margin-left:4px}
+.ok{color:#1a7f37; font-weight:700}
+.bad{color:#c0392b; font-weight:700}
+.ro{color:#8a97a3; font-size:11px}
+
+@media (max-width:720px){
+  .tag{display:none}
+  .wrap{padding:10px 8px 60px}
+  .in.wide{min-width:180px}
+}

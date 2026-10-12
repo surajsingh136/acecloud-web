@@ -9,6 +9,8 @@ const SITES = [
     desc: "Windows Spot & Linux proxy VMs", config: true, url: "/" },
   { id: "hostzop", name: "Hostzop", logo: "/hostzop-logo.svg",
     desc: "Proxy & RDP server maker (API key login)", config: false, url: "/hostzop" },
+  { id: "excloud", name: "ExCloud", logo: "/excloud-logo.svg",
+    desc: "Indian cloud proxy & RDP VMs (API key login)", config: false, url: "/excloud" },
   // Example for future websites:
   // { id: "other", name: "Other Tool", logo: "/logo.svg",
   //   desc: "Short description", config: false, url: "https://example.com" },

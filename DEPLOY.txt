@@ -41,6 +41,7 @@ STEP 2 - Deploy on Render.com
       ACECLOUD_EMAIL  = your acecloud email
       ACECLOUD_PASSWD = your acecloud password
       HOSTZOP_APIKEY  = (optional) your hostzop.com API key
+      EXCLOUD_APIKEY  = (optional) your excloud.in API key (sk-excloud-...)
 4. Let it deploy. You'll get a live URL:
       https://acecloud-web.onrender.com
 
@@ -72,6 +73,23 @@ HOSTZOP  (/hostzop)
 - Create Servers tab: pick OS / size / server class / count -> creates Ubuntu Squid proxies
   (ip:port:user:pass) or Windows RDP servers. Delete Selected / Delete All stops billing.
 - Proxy list is appended to spot/hostzop_proxy.txt (Linux) on the server.
+
+--------------------------------------------------------
+EXCLOUD  (/excloud)
+--------------------------------------------------------
+- Open  https://<your-app>.onrender.com/all  ->  click the ExCloud card (next to Hostzop).
+  It opens  https://<your-app>.onrender.com/excloud  (ExCloud manager).
+- ExCloud uses an API key (sk-excloud-...). In the Keys dialog paste the API key,
+  optionally Zone id / Subnet id, then "Verify key" and "Save account".
+- The default excloud account comes from the EXCLOUD_APIKEY env var (read-only).
+  Extra accounts are saved to spot/excloud.json (ephemeral). To keep them permanently
+  set EXCLOUD_ACCOUNTS to a JSON list, e.g.:
+      EXCLOUD_ACCOUNTS=[{"label":"Main","apikey":"sk-excloud-XXXX","zone_id":"1","subnet_id":"2436"}]
+- Pick Image + Instance Type (rate shown) + Disk GB + Subnet -> creates Ubuntu Squid
+  proxies (ip:port:user:pass) or Windows RDP servers (cloud-init sets up squid + root).
+  Delete Selected / Delete All stops billing. Snapshots create clone templates.
+- Proxy list is appended to spot/excloud_proxy.txt (Linux) on the server.
+- API bases: https://compute.excloud.in  +  https://iam.excloud.in  (Bearer auth).
 
 --------------------------------------------------------
 IMPORTANT NOTES

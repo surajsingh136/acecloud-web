@@ -32,6 +32,7 @@ sys.path.insert(0, str(SPOT_DIR / "server"))
 import acecloud_spot as ac          # original script - untouched
 import spot_server as sw            # original script - untouched
 import hostzop_core as hz           # new module - hostzop.com web port (own code)
+import excloud_core as ex           # new module - excloud.in web port (own code)
 from deploy_core import (load_plans, save_plan, plan_timer, fetch_ondemand_price,
                          users_from_txt, FLV_SPEC, REGION_KEYS, EMAIL, PASSWD, CREDS_FILE)
 
@@ -47,7 +48,9 @@ STATIC_FILES = {"/": "index.html", "/all": "all.html", "/style.css": "style.css"
                 "/app.js": "app.js", "/all.css": "all.css", "/all.js": "all.js",
                 "/logo.svg": "logo.svg", "/hostzop": "hostzop.html",
                 "/hostzop.js": "hostzop.js", "/hostzop.css": "hostzop.css",
-                "/hostzop-logo.svg": "hostzop-logo.svg"}
+                "/hostzop-logo.svg": "hostzop-logo.svg",
+                "/excloud": "excloud.html", "/excloud.js": "excloud.js",
+                "/excloud.css": "excloud.css", "/excloud-logo.svg": "excloud-logo.svg"}
 
 ACCOUNTS_FILE = SPOT_DIR / "accounts.json"
 
@@ -70,6 +73,7 @@ def _hook(mod):
 _hook(ac)
 _hook(sw)
 _hook(hz)
+_hook(ex)
 
 # ============================== app state ==============================
 BUSY = False
@@ -415,6 +419,170 @@ def job_hz_snapshot(vm_uuid, vm_name, name):
         push(f"Snapshot saved: {snaps[-1]['name']}", "ok")
     except BaseException as e:
         push(f"HOSTZOP SNAPSHOT ERROR: {e}", "error")
+    finally:
+        end()
+
+
+# ============================== ExCloud (excloud.in) ==============================
+# ExCloud uses an API key (sk-excloud-...). The default account comes from the
+# EXCLOUD_APIKEY env (read-only); extra accounts come from EXCLOUD_ACCOUNTS or the UI.
+EX_FILE = SPOT_DIR / "excloud.json"
+EX_ACTIVE = "default"
+
+
+def _env_ex():
+    out = []
+    key = (os.environ.get("EXCLOUD_APIKEY") or "").strip()
+    if key:
+        out.append({"id": "default", "label": "Current (default)", "apikey": key,
+                    "zone_id": (os.environ.get("EXCLOUD_ZONE_ID") or "").strip(),
+                    "subnet_id": (os.environ.get("EXCLOUD_SUBNET_ID") or "").strip(),
+                    "security_group_ids": (os.environ.get("EXCLOUD_SECURITY_GROUP_IDS") or "").strip(),
+                    "note": "From environment", "source": "env"})
+    raw = (os.environ.get("EXCLOUD_ACCOUNTS") or "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+        except Exception:
+            push("EXCLOUD_ACCOUNTS is not valid JSON", "warn")
+            data = []
+        for a in (data if isinstance(data, list) else []):
+            if isinstance(a, dict) and a.get("apikey"):
+                out.append({"id": str(a.get("id") or ("ex_" + uuid.uuid4().hex[:8])),
+                            "label": str(a.get("label") or "ExCloud"),
+                            "apikey": str(a["apikey"]),
+                            "zone_id": str(a.get("zone_id") or ""),
+                            "subnet_id": str(a.get("subnet_id") or ""),
+                            "security_group_ids": str(a.get("security_group_ids") or ""),
+                            "note": str(a.get("note") or ""), "source": "envlist"})
+    return out
+
+
+def load_ex_accounts():
+    accts, seen = [], set()
+    for a in _env_ex():
+        if a["id"] in seen:
+            a["id"] = "ex_" + uuid.uuid4().hex[:8]
+        seen.add(a["id"])
+        accts.append(a)
+    try:
+        if EX_FILE.exists():
+            for a in (json.loads(EX_FILE.read_text("utf-8")) or []):
+                if isinstance(a, dict) and a.get("apikey") and a.get("id") not in seen:
+                    a.setdefault("source", "file")
+                    seen.add(a.get("id"))
+                    accts.append(a)
+    except Exception:
+        pass
+    return accts
+
+
+def save_ex_accounts(accts):
+    data = [a for a in accts if a.get("source") == "file"]
+    try:
+        EX_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def find_ex_account(aid):
+    for a in load_ex_accounts():
+        if a.get("id") == aid:
+            return a
+    return None
+
+
+def active_ex():
+    accts = load_ex_accounts()
+    return (find_ex_account(EX_ACTIVE)
+            or next((a for a in accts if a.get("source") == "env"), None)
+            or (accts[0] if accts else None))
+
+
+def ex_key():
+    return ((active_ex() or {}).get("apikey") or "").strip()
+
+
+def ex_meta():
+    key = ex_key()
+    if not key:
+        return {"ok": False, "msg": "No excloud account", "images": [], "types": [],
+                "subnets": [], "default_subnet_id": "", "user": ""}
+    return ex.meta(key)
+
+
+def job_ex_create(body):
+    try:
+        key = ex_key()
+        res = ex.create_proxies(key, body, int(body.get("count", 1) or 1))
+        lines = res.get("lines", [])
+        for ln in lines:
+            push(f"READY {ln}", "ok")
+        if lines:
+            out = SPOT_DIR / "excloud_proxy.txt"
+            with open(out, "a") as f:
+                for ln in lines:
+                    f.write(ln + "\n")
+            push(f"Saved {len(lines)} line(s) -> {out}", "ok")
+        for e in res.get("errors", []):
+            push(e, "warn")
+    except BaseException as e:
+        push(f"EXCLOUD CREATE ERROR: {e}", "error")
+    finally:
+        end()
+
+
+def job_ex_delete(ids, is_all):
+    try:
+        key = ex_key()
+        if is_all:
+            ex.delete_all(key)
+        else:
+            ex.delete_vms(key, ids)
+    except BaseException as e:
+        push(f"EXCLOUD DELETE ERROR: {e}", "error")
+    finally:
+        end()
+
+
+EX_SNAPS_FILE = SPOT_DIR / "excloud_snaps.json"
+
+
+def load_ex_snaps():
+    try:
+        if EX_SNAPS_FILE.exists():
+            data = json.loads(EX_SNAPS_FILE.read_text("utf-8"))
+            return data if isinstance(data, list) else []
+    except Exception:
+        pass
+    return []
+
+
+def save_ex_snaps(snaps):
+    try:
+        EX_SNAPS_FILE.write_text(json.dumps(snaps, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def job_ex_snapshot(vm_id, vm_name, name):
+    try:
+        key = ex_key()
+        push(f"Taking snapshot of {vm_name or vm_id} ...", "sys")
+        res = ex.make_snapshot(key, vm_id)
+        push(f"snapshot create: HTTP {res.get('code')}", "info")
+        sid = res.get("snapshot_id")
+        if not sid:
+            push("Snapshot ID not returned - snapshot may have failed", "warn")
+            return
+        snaps = load_ex_snaps()
+        snaps.append({"name": name or (str(vm_name or "vm") + " snapshot"),
+                      "snapshot_id": sid, "vm_id": vm_id, "vm_name": vm_name or "",
+                      "date": time.strftime("%Y-%m-%d %H:%M:%S")})
+        save_ex_snaps(snaps)
+        push(f"Snapshot saved: {snaps[-1]['name']}", "ok")
+    except BaseException as e:
+        push(f"EXCLOUD SNAPSHOT ERROR: {e}", "error")
     finally:
         end()
 
@@ -938,6 +1106,39 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"file": fn, "text": txt})
             return
 
+        if path == "/api/excloud/accounts":
+            self._json({"active": EX_ACTIVE, "accounts": [{
+                "id": a["id"], "label": a.get("label") or "ExCloud",
+                "apikey": a.get("apikey") or "", "has_key": bool(a.get("apikey")),
+                "zone_id": a.get("zone_id") or "", "subnet_id": a.get("subnet_id") or "",
+                "note": a.get("note") or "", "source": a.get("source", "file"),
+                "editable": a.get("source") == "file",
+            } for a in load_ex_accounts()]})
+            return
+
+        if path == "/api/excloud/meta":
+            self._json(ex_meta())
+            return
+
+        if path == "/api/excloud/state":
+            self._json(ex.state(ex_key()))
+            return
+
+        if path == "/api/excloud/snaps":
+            self._json({"snaps": load_ex_snaps()})
+            return
+
+        if path == "/api/excloud/output":
+            p = SPOT_DIR / "excloud_proxy.txt"
+            txt = ""
+            if p.exists():
+                try:
+                    txt = p.read_text("utf-8", errors="replace")
+                except Exception:
+                    txt = ""
+            self._json({"file": "excloud_proxy.txt", "text": txt})
+            return
+
         if path == "/api/state":
             plans = load_plans()
             rows, counts = [], {"spot": 0, "ondemand": 0, "proxy": 0, "active": 0, "total": 0}
@@ -999,7 +1200,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- POST ----------
     def do_POST(self):
-        global ACTIVE_ID, HZ_ACTIVE
+        global ACTIVE_ID, HZ_ACTIVE, EX_ACTIVE
         if not self._authed():
             self._json({"error": "wrong pin"}, 401)
             return
@@ -1237,6 +1438,111 @@ class Handler(BaseHTTPRequestHandler):
                 return
             threading.Thread(target=job_hz_snapshot, daemon=True,
                              args=(vm_uuid, (b.get("vm_name") or "").strip(),
+                                   (b.get("name") or "").strip())).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/excloud/verify":
+            self._json(ex.verify((b.get("apikey") or "").strip()))
+            return
+
+        if path == "/api/excloud/accounts/add":
+            label = (b.get("label") or "").strip()
+            key = (b.get("apikey") or "").strip()
+            zone = str(b.get("zone_id") or "").strip()
+            sub = str(b.get("subnet_id") or "").strip()
+            note = (b.get("note") or "").strip()
+            eid = (b.get("id") or "").strip()
+            accts = load_ex_accounts()
+            if eid:
+                tgt = next((a for a in accts if a.get("id") == eid), None)
+                if not tgt or tgt.get("source") != "file":
+                    self._json({"ok": False, "msg": "This account is read-only"}, 400)
+                    return
+                if label:
+                    tgt["label"] = label
+                if key:
+                    tgt["apikey"] = key
+                tgt["zone_id"] = zone
+                tgt["subnet_id"] = sub
+                tgt["note"] = note
+                save_ex_accounts(accts)
+                new_id = eid
+            else:
+                if not key:
+                    self._json({"ok": False, "msg": "API key required"}, 400)
+                    return
+                new_id = "ex_" + uuid.uuid4().hex[:8]
+                accts.append({"id": new_id, "label": label or "ExCloud", "apikey": key,
+                              "zone_id": zone, "subnet_id": sub, "note": note, "source": "file"})
+                save_ex_accounts(accts)
+            if b.get("use"):
+                EX_ACTIVE = new_id
+            self._json({"ok": True, "id": new_id})
+            return
+
+        if path == "/api/excloud/accounts/delete":
+            eid = (b.get("id") or "").strip()
+            accts = load_ex_accounts()
+            tgt = next((a for a in accts if a.get("id") == eid), None)
+            if not tgt or tgt.get("source") != "file":
+                self._json({"ok": False, "msg": "Cannot delete this account"}, 400)
+                return
+            save_ex_accounts([a for a in accts if a.get("id") != eid])
+            if EX_ACTIVE == eid:
+                EX_ACTIVE = "default"
+            self._json({"ok": True})
+            return
+
+        if path == "/api/excloud/accounts/activate":
+            eid = (b.get("id") or "").strip()
+            if not find_ex_account(eid):
+                self._json({"ok": False, "msg": "No such account"}, 400)
+                return
+            EX_ACTIVE = eid
+            self._json({"ok": True})
+            return
+
+        if path == "/api/excloud/create":
+            if not ex_key():
+                self._json({"ok": False, "msg": "Add/activate an excloud account first"}, 400)
+                return
+            if not begin():
+                self._json({"ok": False, "msg": "Busy..."}, 409)
+                return
+            threading.Thread(target=job_ex_create, daemon=True, args=(b,)).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/excloud/delete":
+            if not ex_key():
+                self._json({"ok": False, "msg": "No excloud account"}, 400)
+                return
+            if not begin():
+                self._json({"ok": False, "msg": "Busy..."}, 409)
+                return
+            threading.Thread(target=job_ex_delete, daemon=True,
+                             args=(b.get("ids") or [], bool(b.get("all")))).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/excloud/testproxy":
+            self._json(ex.test_proxy(b.get("line") or ""))
+            return
+
+        if path == "/api/excloud/snapshot":
+            if not ex_key():
+                self._json({"ok": False, "msg": "No excloud account"}, 400)
+                return
+            vm_id = (b.get("vm_id") or "").strip()
+            if not vm_id:
+                self._json({"ok": False, "msg": "vm_id required"}, 400)
+                return
+            if not begin():
+                self._json({"ok": False, "msg": "Busy..."}, 409)
+                return
+            threading.Thread(target=job_ex_snapshot, daemon=True,
+                             args=(vm_id, (b.get("vm_name") or "").strip(),
                                    (b.get("name") or "").strip())).start()
             self._json({"ok": True})
             return

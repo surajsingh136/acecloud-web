@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ExCloud Proxy Maker</title>
+<link rel="stylesheet" href="/excloud.css">
+</head>
+<body>
+
+<header class="banner">
+  <div class="banner-l">
+    <span class="brand">EXCLOUD</span>
+    <span class="brand2">PROXY MAKER &nbsp;|&nbsp; Dashboard</span>
+  </div>
+  <div class="banner-r">
+    <select id="ex_acct" class="acctsel" title="ExCloud account"></select>
+    <button id="btn_keys" class="btn ghosty">Keys</button>
+    <span class="tag">squid auto-setup&nbsp;&nbsp;|&nbsp;&nbsp;apikey&nbsp;&nbsp;|&nbsp;&nbsp;bill 0 after delete</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="panel ctrl">
+    <div class="row">
+      <label>Name:</label>
+      <input id="c_name" class="in" value="exproxy">
+      <label class="gap">Count:</label>
+      <input id="c_count" class="in c-sm" type="number" min="1" max="100" value="1">
+      <label class="gap">Disk GB:</label>
+      <input id="c_disk" class="in c-xs" type="number" min="10" value="25">
+    </div>
+
+    <div class="row">
+      <label>Image:</label>
+      <select id="c_image" class="in wide"></select>
+    </div>
+
+    <div class="row">
+      <label>Template (snapshot):</label>
+      <select id="c_tpl" class="in wide"></select>
+    </div>
+
+    <div class="row">
+      <label>Instance Type:</label>
+      <select id="c_type" class="in wide"></select>
+    </div>
+
+    <div class="row">
+      <label>Subnet:</label>
+      <select id="c_subnet" class="in wide"></select>
+    </div>
+
+    <div class="row">
+      <label>Proxy User:</label>
+      <input id="c_user" class="in" value="ajay">
+      <label class="gap">Proxy Pass:</label>
+      <input id="c_pass" class="in" value="ajay">
+      <label class="gap">Root Pass:</label>
+      <input id="c_root" class="in" value="">
+    </div>
+
+    <div class="btns">
+      <button id="btn_create" class="btn create">Create Proxies</button>
+      <button id="btn_delall" class="btn del">Delete All (bill 0)</button>
+      <button id="btn_snap" class="btn">Snapshot</button>
+      <button id="btn_test" class="btn">Test Proxy</button>
+      <button id="btn_open" class="btn">Open Output</button>
+    </div>
+
+    <div class="row">
+      <label>Proxy test (ip:port:user:pass):</label>
+      <input id="c_testline" class="in wide">
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="toolbar">
+      <span id="stats" class="stats">Servers: --</span>
+      <div class="tb-r">
+        <button id="btn_refresh" class="btn sm">Refresh</button>
+        <button id="btn_copyip" class="btn sm">Copy IP</button>
+        <button id="btn_copyproxy" class="btn sm">Copy Proxy</button>
+        <button id="btn_delsel" class="btn sm del">Delete Selected</button>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table id="srv">
+        <thead>
+          <tr>
+            <th class="chk"></th><th>Name</th><th>IP</th><th>Status</th>
+            <th>OS</th><th>Size</th><th>Proxy</th><th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="srvBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="logwrap">
+    <div id="log" class="log"></div>
+  </section>
+
+</main>
+
+<footer class="statusbar"><span id="balance">ExCloud: --</span></footer>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head"><span id="modal-title">Title</span><button id="modal-x" class="btn sm">X</button></div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/excloud.js"></script>
+</body>
+</html>

@@ -11,6 +11,9 @@ spot/hostzop.json
 **/hostzop.json
 **/hostzop_proxy.txt
 **/hostzop_snaps.json
+**/excloud.json
+**/excloud_proxy.txt
+**/excloud_snaps.json
 **/windows.txt
 **/spot_server_ips.txt
 **/*_ips.txt
