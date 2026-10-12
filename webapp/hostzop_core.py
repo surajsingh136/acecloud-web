@@ -152,24 +152,44 @@ def hourly_rate(policy, cpu, ram, disks):
             + disks * policy.get("storage", 0))
 
 
-def list_vms(key):
-    """VMs of the default location (like the desktop GUI table)."""
-    return _list("GET", "/v1/user-resource/vm/list", key)
+def _slugs(key):
+    return [l.get("slug") for l in locations(key) if l.get("slug")]
 
 
-def list_ips(key):
-    return _list("GET", "/v1/network/ip_addresses", key)
+def _pref(slug):
+    return f"/v1/{slug}" if slug else "/v1"
 
 
-def get_vm(key, uuid):
-    code, data = api("GET", "/v1/user-resource/vm", key, params={"uuid": uuid})
-    if code == 200 and isinstance(data, dict):
-        return data
+def list_vms(key, slug=None):
+    """VMs across the default location + every location slug (deduped)."""
+    seen = {}
+    prefs = [slug] if slug else [None] + _slugs(key)
+    for s in prefs:
+        for v in _list("GET", f"{_pref(s)}/user-resource/vm/list", key):
+            seen.setdefault(v.get("uuid"), v)
+    return list(seen.values())
+
+
+def list_ips(key, slug=None):
+    seen = {}
+    prefs = [slug] if slug else [None] + _slugs(key)
+    for s in prefs:
+        for i in _list("GET", f"{_pref(s)}/network/ip_addresses", key):
+            seen.setdefault(i.get("address"), i)
+    return list(seen.values())
+
+
+def get_vm(key, uuid, slug=None):
+    prefs = [slug] if slug else [None] + _slugs(key)
+    for s in prefs:
+        code, data = api("GET", f"{_pref(s)}/user-resource/vm", key, params={"uuid": uuid})
+        if code == 200 and isinstance(data, dict) and data:
+            return data
     return {}
 
 
-def networks(key):
-    return _list("GET", "/v1/network/networks", key)
+def networks(key, slug=None):
+    return _list("GET", f"{_pref(slug)}/network/networks", key)
 
 
 def verify(key):
@@ -236,19 +256,19 @@ def _build_cloud_init(cfg):
     }
 
 
-def ensure_network(key, name):
+def ensure_network(key, name, slug=None):
     name = (name or "My Network").strip() or "My Network"
-    for n in networks(key):
+    for n in networks(key, slug):
         if n.get("name") == name or n.get("is_default"):
             return n
-    api("POST", "/v1/network/network", key, params={"name": name})
-    for n in networks(key):
+    api("POST", f"{_pref(slug)}/network/network", key, params={"name": name})
+    for n in networks(key, slug):
         if n.get("name") == name or n.get("is_default"):
             return n
     return None
 
 
-def _create_one(key, cfg, name, pool_uuid, os_name, os_version, network_uuid):
+def _create_one(key, cfg, name, pool_uuid, os_name, os_version, network_uuid, slug=None):
     is_win = os_name == "windows"
     data = {
         "name": name,
@@ -268,26 +288,26 @@ def _create_one(key, cfg, name, pool_uuid, os_name, os_version, network_uuid):
         data["designated_pool_uuid"] = pool_uuid
     if cfg.get("billing_account_id"):
         data["billing_account_id"] = cfg["billing_account_id"]
-    return api("POST", "/v1/user-resource/vm", key, data=data)
+    return api("POST", f"{_pref(slug)}/user-resource/vm", key, data=data)
 
 
-def find_or_assign_ip(key, cfg, vm_uuid):
-    for ip in list_ips(key):
+def find_or_assign_ip(key, cfg, vm_uuid, slug=None):
+    for ip in list_ips(key, slug):
         if ip.get("assigned_to") == vm_uuid and ip.get("enabled"):
             return ip.get("address")
     body = {"name": str(cfg.get("instance_name") or "hz") + "-ip"}
     if cfg.get("billing_account_id"):
         body["billing_account_id"] = cfg["billing_account_id"]
-    c1, r1 = api("POST", "/v1/network/ip_addresses", key, json=body)
+    c1, r1 = api("POST", f"{_pref(slug)}/network/ip_addresses", key, json=body)
     address = r1.get("address") if isinstance(r1, dict) else None
     if not address:
-        for ip in list_ips(key):
+        for ip in list_ips(key, slug):
             address = ip.get("address")
             if address:
                 break
     if not address:
         return None
-    api("POST", f"/v1/network/ip_addresses/{address}/assign", key,
+    api("POST", f"{_pref(slug)}/network/ip_addresses/{address}/assign", key,
         json={"assigned_to": vm_uuid, "assigned_to_resource_type": "virtual_machine"})
     return address
 
@@ -305,6 +325,7 @@ def create_proxies(key, cfg, count):
     cfg.setdefault("proxy_pass", "ajay")
     cfg.setdefault("root_password", "")
     cfg.setdefault("instance_name", "hzproxy")
+    slug = (cfg.get("location") or "").strip() or None
 
     me = user_info(key)
     log(f"Hostzop user: {me.get('name', '?')}", "sys")
@@ -319,11 +340,11 @@ def create_proxies(key, cfg, count):
                 pool_uuid = p.get("uuid")
                 break
 
-    net = ensure_network(key, cfg.get("network_name"))
+    net = ensure_network(key, cfg.get("network_name"), slug)
     if not net:
         return {"lines": [], "errors": ["Network not found/created"]}
     net_uuid = net.get("uuid")
-    log(f"Network: {net.get('name')} ({str(net_uuid)[:12]})", "info")
+    log(f"Location: {slug or 'default'} | Network: {net.get('name')} ({str(net_uuid)[:12]})", "info")
 
     errors = []
     created = []
@@ -332,7 +353,7 @@ def create_proxies(key, cfg, count):
         for i in range(count):
             name = cfg["instance_name"] if count == 1 else f"{cfg['instance_name']}-{i + 1}"
             futs[pool.submit(_create_one, key, cfg, name, pool_uuid, os_name, os_version,
-                             net_uuid)] = name
+                             net_uuid, slug)] = name
         for fut, name in futs.items():
             try:
                 code, resp = fut.result()
@@ -354,7 +375,7 @@ def create_proxies(key, cfg, count):
     while pending and time.time() < deadline:
         time.sleep(10)
         for name, uuid in list(pending.items()):
-            v = get_vm(key, uuid)
+            v = get_vm(key, uuid, slug)
             s = str(v.get("status", "")).lower()
             if s in ("running", "active", "ready", "available"):
                 del pending[name]
@@ -370,7 +391,7 @@ def create_proxies(key, cfg, count):
     win = os_name == "windows"
     lines = []
     with ThreadPoolExecutor(max_workers=min(len(created), 10)) as pool:
-        futs = {pool.submit(find_or_assign_ip, key, cfg, uuid): name for name, uuid in created}
+        futs = {pool.submit(find_or_assign_ip, key, cfg, uuid, slug): name for name, uuid in created}
         for fut, name in futs.items():
             try:
                 ip = fut.result()
@@ -388,11 +409,16 @@ def create_proxies(key, cfg, count):
     return {"lines": lines, "errors": errors}
 
 
-def delete_vms(key, uuids):
+def delete_vms(key, uuids, slug=None):
     key = (key or "").strip()
     done, errors = 0, []
+    slugs = [slug] if slug else [None] + _slugs(key)
     for uuid in (uuids or []):
-        code, resp = api("DELETE", "/v1/user-resource/vm", key, data={"uuid": uuid})
+        code, resp = 500, ""
+        for s in slugs:
+            code, resp = api("DELETE", f"{_pref(s)}/user-resource/vm", key, data={"uuid": uuid})
+            if code == 200:
+                break
         if code == 200:
             done += 1
             log(f"Deleted VM {str(uuid)[:12]}", "ok")
@@ -413,7 +439,10 @@ def delete_all(key):
         if ip.get("assigned_to") and ip["assigned_to"] not in known:
             addr = ip.get("address")
             if addr:
-                api("DELETE", f"/v1/network/ip_addresses/{addr}", key)
+                for s in [None] + _slugs(key):
+                    c, _ = api("DELETE", f"{_pref(s)}/network/ip_addresses/{addr}", key)
+                    if c == 200:
+                        break
                 freed += 1
     log(f"Cleanup done: {res['deleted']} VM(s), {freed} stale IP(s)", "ok")
     return {"ok": True, "deleted": res["deleted"], "ips": freed}
