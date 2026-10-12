@@ -41,7 +41,7 @@ button.del:hover { background: var(--blue-hover); }
 
 /* stats + table */
 #stats { padding: 4px 12px; font-weight: bold; color: var(--navy); }
-#tblwrap { margin: 0 12px; overflow: auto; min-height: 400px; max-height: 62vh; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
+#tblwrap { margin: 0 12px; overflow: auto; min-height: 240px; max-height: 62vh; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
 table { border-collapse: collapse; width: 100%; }
 th { background: var(--navy); color: #fff; padding: 7px 8px; text-align: left; font-size: 12px; position: sticky; top: 0; }
 td { padding: 6px 8px; border-bottom: 1px solid #eef3f8; font-size: 13px; }
