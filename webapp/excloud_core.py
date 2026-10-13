@@ -40,6 +40,11 @@ sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_c
 echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config
 echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
 systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+iptables -I INPUT -p tcp --dport 3128 -j ACCEPT 2>/dev/null || true
+iptables -I INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null || true
+ufw allow 3128/tcp 2>/dev/null || true
+ufw allow 22/tcp 2>/dev/null || true
+ufw --force enable 2>/dev/null || true
 apt-get update -y >/tmp/apt-update.log 2>&1
 apt-get install -y squid apache2-utils >/tmp/apt-squid.log 2>&1
 AUTH_HELPER=$(ls /usr/lib/squid/basic_ncsa_auth /usr/lib/squid3/basic_ncsa_auth /usr/lib/x86_64-linux-gnu/squid/basic_ncsa_auth 2>/dev/null | head -n1)
