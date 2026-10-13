@@ -352,6 +352,13 @@ def job_hz_create(body):
         key = hz_key()
         res = hz.create_proxies(key, body, int(body.get("count", 1) or 1))
         lines = res.get("lines", [])
+        creds = res.get("creds", [])
+        if creds:
+            pw = load_hz_pw()
+            for c in creds:
+                if c.get("uuid"):
+                    pw[c["uuid"]] = c
+            save_hz_pw(pw)
         for ln in lines:
             push(f"READY {ln}", "ok")
         if lines:
@@ -382,6 +389,24 @@ def job_hz_delete(uuids, is_all):
 
 
 HZ_SNAPS_FILE = SPOT_DIR / "hostzop_snaps.json"
+HZ_PW_FILE = SPOT_DIR / "hostzop_pw.json"
+
+
+def load_hz_pw():
+    try:
+        if HZ_PW_FILE.exists():
+            data = json.loads(HZ_PW_FILE.read_text("utf-8"))
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+def save_hz_pw(m):
+    try:
+        HZ_PW_FILE.write_text(json.dumps(m, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def load_hz_snaps():
@@ -1082,7 +1107,15 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/hostzop/state":
-            self._json(hz.state(hz_key()))
+            st = hz.state(hz_key())
+            pw = load_hz_pw()
+            for row in st.get("rows", []):
+                c = pw.get(row.get("uuid") or "")
+                if c:
+                    row["root_password"] = c.get("root_password", "")
+                    row["proxy_user"] = c.get("proxy_user", "")
+                    row["proxy_pass"] = c.get("proxy_pass", "")
+            self._json(st)
             return
 
         if path == "/api/hostzop/balance":

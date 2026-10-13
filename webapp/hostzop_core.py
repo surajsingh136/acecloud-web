@@ -519,9 +519,10 @@ def create_proxies(key, cfg, count):
 
     win = os_name == "windows"
     lines = []
+    creds = []
     with ThreadPoolExecutor(max_workers=min(len(created), 10)) as pool:
-        futs = {pool.submit(find_or_assign_ip, key, cfg, uuid, slug): name for name, uuid in created}
-        for fut, name in futs.items():
+        futs = {pool.submit(find_or_assign_ip, key, cfg, uuid, slug): (name, uuid) for name, uuid in created}
+        for fut, (name, uuid) in futs.items():
             try:
                 ip = fut.result()
             except Exception as e:
@@ -535,7 +536,13 @@ def create_proxies(key, cfg, count):
                 lines.append(f"{ip}:3389:Administrator:{cfg['root_password']}")
             else:
                 lines.append(f"{ip}:{cfg['proxy_port']}:{cfg['proxy_user']}:{cfg['proxy_pass']}")
-    return {"lines": lines, "errors": errors}
+            creds.append({
+                "uuid": uuid, "ip": ip, "windows": win,
+                "root_password": cfg["root_password"],
+                "proxy_user": cfg["proxy_user"], "proxy_pass": cfg["proxy_pass"],
+                "proxy_port": cfg["proxy_port"],
+            })
+    return {"lines": lines, "errors": errors, "creds": creds}
 
 
 def delete_vms(key, uuids, slug=None):

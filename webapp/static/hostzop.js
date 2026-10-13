@@ -216,7 +216,8 @@ async function createServers() {
 /* ---------------- servers ---------------- */
 function proxyLine(r) {
   if (!r.ip) return "";
-  return r.windows ? `${r.ip}:3389:Administrator:${$("c_root").value || ""}` : `${r.ip}:3128:${$("c_user").value || "ajay"}:${$("c_pass").value || "ajay"}`;
+  if (r.windows) return `${r.ip}:3389:Administrator:${r.root_password || $("c_root").value || ""}`;
+  return `${r.ip}:${r.proxy_port || 3128}:${r.proxy_user || $("c_user").value || "ajay"}:${r.proxy_pass || $("c_pass").value || "ajay"}`;
 }
 async function loadServers() {
   let d; try { d = await J("/api/hostzop/state"); } catch (e) { return; }
@@ -253,6 +254,12 @@ function copyText(txt, label) {
 }
 function copyIP() { const r = pickRow(); if (!r) { toast("No server"); return; } copyText(r.ip, "Copied IP"); }
 function copyProxy() { const r = pickRow(); if (!r) { toast("No server"); return; } copyText(proxyLine(r), "Copied proxy"); }
+function copyRdpPass() {
+  const r = pickRow(); if (!r) { toast("No server"); return; }
+  const pw = r.root_password || ($("c_root") && $("c_root").value) || "";
+  if (!pw) { toast("No RDP password"); return; }
+  copyText(pw, "Copied RDP password");
+}
 async function deleteSelected() {
   const sel = selectedRows();
   if (!sel.length) { toast("Select servers first"); return; }
@@ -361,6 +368,7 @@ function wire() {
   $("btn_refresh").addEventListener("click", loadServers);
   $("btn_copyip").addEventListener("click", copyIP);
   $("btn_copyproxy").addEventListener("click", copyProxy);
+  $("btn_copyrdp").addEventListener("click", copyRdpPass);
   $("btn_delsel").addEventListener("click", deleteSelected);
 }
 
