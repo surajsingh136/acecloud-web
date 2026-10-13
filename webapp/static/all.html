@@ -26,7 +26,7 @@
 <div id="cfg" class="modal">
   <div class="box">
     <div class="hd">
-      <img src="/logo.svg" class="mini" alt="">
+      <img src="/logo.svg" class="mini" id="cfgLogo" alt="">
       <span id="cfgTitle">ACECLOUD - Configure</span>
       <button class="x" onclick="hide('cfg')">&times;</button>
     </div>
@@ -40,35 +40,56 @@
         <h3 id="formTitle">Add account</h3>
         <label>Label</label>
         <input id="alabel" placeholder="e.g. Office">
-        <label>Email</label>
-        <input id="aemail" placeholder="you@example.com">
-        <label>Password</label>
-        <input id="apass" type="password" placeholder="********">
-        <label>Default region</label>
-        <select id="aregion">
-          <option value="ap-south-mum-2">Mumbai</option>
-          <option value="ap-south-noi-1">Noida</option>
-        </select>
 
-        <button type="button" class="detectbtn" onclick="detect()">Detect required details (project &amp; networks)</button>
-        <div id="detectBox" class="detectbox">
-          <label>Project</label>
-          <select id="projSel" onchange="renderNets()"></select>
-          <div id="netBox"></div>
+        <div id="fieldsAce">
+          <label>Email</label>
+          <input id="aemail" placeholder="you@example.com">
+          <label>Password</label>
+          <input id="apass" type="password" placeholder="********">
+          <label>Default region</label>
+          <select id="aregion">
+            <option value="ap-south-mum-2">Mumbai</option>
+            <option value="ap-south-noi-1">Noida</option>
+          </select>
+
+          <button type="button" class="detectbtn" onclick="detect()">Detect required details (project &amp; networks)</button>
+          <div id="detectBox" class="detectbox">
+            <label>Project</label>
+            <select id="projSel" onchange="renderNets()"></select>
+            <div id="netBox"></div>
+          </div>
+
+          <details class="adv">
+            <summary>Required IDs (auto-filled by Detect; edit only if needed)</summary>
+            <label>Project ID</label>
+            <input id="aproj" placeholder="project id">
+            <label>Network ID - Mumbai</label>
+            <input id="anetmum" placeholder="external network id (Mumbai)">
+            <label>Network ID - Noida</label>
+            <input id="anetnoi" placeholder="external network id (Noida)">
+          </details>
+
+          <label>API key (optional)</label>
+          <input id="akey" placeholder="leave empty if none">
         </div>
 
-        <details class="adv">
-          <summary>Required IDs (auto-filled by Detect; edit only if needed)</summary>
-          <label>Project ID</label>
-          <input id="aproj" placeholder="project id">
-          <label>Network ID - Mumbai</label>
-          <input id="anetmum" placeholder="external network id (Mumbai)">
-          <label>Network ID - Noida</label>
-          <input id="anetnoi" placeholder="external network id (Noida)">
-        </details>
+        <div id="fieldsKey" style="display:none">
+          <label>API key</label>
+          <input id="akey2" placeholder="paste API key">
+          <div id="fieldsHz" style="display:none">
+            <label>Billing account ID (optional)</label>
+            <input id="ahzbill" placeholder="billing account id">
+            <label>Location (optional)</label>
+            <input id="ahzloc" placeholder="e.g. chn01">
+          </div>
+          <div id="fieldsEx" style="display:none">
+            <label>Zone ID (optional)</label>
+            <input id="aexzone" placeholder="zone id">
+            <label>Subnet ID (optional)</label>
+            <input id="aexsub" placeholder="subnet id">
+          </div>
+        </div>
 
-        <label>API key (optional)</label>
-        <input id="akey" placeholder="leave empty if none">
         <label>Note (optional)</label>
         <input id="anote" placeholder="">
         <label class="chk"><input type="checkbox" id="ause" checked> Use this account now</label>

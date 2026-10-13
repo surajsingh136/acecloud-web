@@ -5,12 +5,12 @@ const $ = (id) => document.getElementById(id);
 
 /* ---- Sites shown on the hub. Add more websites here later. ---- */
 const SITES = [
-  { id: "acecloud", name: "AceCloud", logo: "/logo.svg",
-    desc: "Windows Spot & Linux proxy VMs", config: true, url: "/" },
-  { id: "hostzop", name: "Hostzop", logo: "/hostzop-logo.svg",
-    desc: "Proxy & RDP server maker (API key login)", config: false, url: "/hostzop" },
-  { id: "excloud", name: "ExCloud", logo: "/excloud-logo.svg",
-    desc: "Indian cloud proxy & RDP VMs (API key login)", config: false, url: "/excloud" },
+  { id: "acecloud", kind: "ace", name: "AceCloud", logo: "/logo.svg",
+    desc: "Windows Spot & Linux proxy VMs", config: true, url: "/", api: "/api" },
+  { id: "hostzop", kind: "hostzop", name: "Hostzop", logo: "/hostzop-logo.svg",
+    desc: "Proxy & RDP server maker (API key login)", config: true, url: "/hostzop", api: "/api/hostzop" },
+  { id: "excloud", kind: "excloud", name: "ExCloud", logo: "/excloud-logo.svg",
+    desc: "Indian cloud proxy & RDP VMs (API key login)", config: true, url: "/excloud", api: "/api/excloud" },
   // Example for future websites:
   // { id: "other", name: "Other Tool", logo: "/logo.svg",
   //   desc: "Short description", config: false, url: "https://example.com" },
@@ -61,19 +61,33 @@ function addPlaceholder() { toast("Coming soon - more websites will be added her
 let EDIT_ID = "";
 let ACC = {};
 let DETECT = null;
+let CUR = SITES[0];
 
 async function openConfig(site) {
+  CUR = site;
   $("cfgTitle").textContent = site.name + " - Configure";
+  const lg = $("cfgLogo");
+  if (lg) lg.src = site.logo;
   resetForm();
   $("cfg").style.display = "flex";
   await loadAccounts();
 }
 
+function applyKind() {
+  const k = (CUR && CUR.kind) || "ace";
+  $("fieldsAce").style.display = k === "ace" ? "" : "none";
+  $("fieldsKey").style.display = k === "ace" ? "none" : "";
+  $("fieldsHz").style.display = k === "hostzop" ? "" : "none";
+  $("fieldsEx").style.display = k === "excloud" ? "" : "none";
+}
+
 function resetForm() {
   EDIT_ID = "";
   DETECT = null;
+  applyKind();
   $("formTitle").textContent = "Add account";
-  ["alabel", "aemail", "apass", "akey", "anote", "aproj", "anetmum", "anetnoi"].forEach(i => { $(i).value = ""; });
+  ["alabel", "aemail", "apass", "akey", "akey2", "anote", "aproj", "anetmum", "anetnoi",
+   "ahzbill", "ahzloc", "aexzone", "aexsub"].forEach(i => { if ($(i)) $(i).value = ""; });
   $("aregion").value = "ap-south-mum-2";
   $("detectBox").style.display = "none";
   $("ause").checked = true;
@@ -81,32 +95,36 @@ function resetForm() {
 
 async function loadAccounts() {
   let d;
-  try { d = await J("/api/accounts"); }
+  try { d = await J(CUR.api + "/accounts"); }
   catch (e) { $("acclist").innerHTML = '<div class="err">PIN required.</div>'; return; }
   ACC = {};
   const list = d.accounts || [];
   list.forEach(a => { ACC[a.id] = a; });
+  const keySite = CUR.kind !== "ace";
   $("acclist").innerHTML =
-    '<table class="acct"><thead><tr><th>Use</th><th>Label</th><th>Email</th><th>API</th><th></th></tr></thead><tbody>' +
+    '<table class="acct"><thead><tr><th>Use</th><th>Label</th><th>' +
+    (keySite ? "API key" : "Email") + '</th><th></th></tr></thead><tbody>' +
     list.map(a => `
       <tr class="${a.id === d.active ? "act" : ""}">
         <td>${a.id === d.active ? '<span class="dot" title="active"></span>'
              : `<button class="mini" onclick="activate('${a.id}')">Use</button>`}</td>
         <td>${esc(a.label)}${a.editable ? "" : ' <span class="ro">(read-only)</span>'}</td>
-        <td>${esc(a.email)}</td>
-        <td>${a.api_key ? "set" : "-"}</td>
+        <td>${esc(keySite ? ((a.has_key || a.apikey) ? "set" : "-") : (a.email || "-"))}</td>
         <td class="rowbtns">
           ${a.editable ? `<button class="mini" onclick="editAccount('${a.id}')">Edit</button>
           <button class="mini del" onclick="delAccount('${a.id}')">Del</button>` : ""}
-          <button class="mini go" onclick="window.location.href='/'">Open</button>
+          <button class="mini go" onclick="window.location.href='${CUR.url}'">Open</button>
         </td>
       </tr>`).join("") +
     "</tbody></table>";
   const act = list.find(a => a.id === d.active) || {};
-  $("activeInfo").textContent = "Active account: " + (act.email || "-") + (act.label ? " (" + act.label + ")" : "");
+  $("activeInfo").textContent = "Active account: " +
+    (keySite ? (act.label || act.id || "-") : (act.email || "-")) +
+    (act.label && !keySite ? " (" + act.label + ")" : "");
 }
 
 async function detect() {
+  if (CUR.kind !== "ace") return;
   const email = $("aemail").value.trim();
   const password = $("apass").value;
   if (!email || !password) { toast("Enter email and password first"); return; }
@@ -151,16 +169,33 @@ function netChanged(region, val) {
 }
 
 async function saveAccount() {
-  const body = {
-    id: EDIT_ID, label: $("alabel").value.trim(), email: $("aemail").value.trim(),
-    password: $("apass").value, api_key: $("akey").value.trim(),
-    note: $("anote").value.trim(), use: $("ause").checked,
-    region: $("aregion").value, project_id: $("aproj").value.trim(),
-    net_mumbai: $("anetmum").value.trim(), net_noida: $("anetnoi").value.trim(),
-  };
-  if (!EDIT_ID && (!body.email || !body.password)) { toast("Email and password required"); return; }
+  let body;
+  if (CUR.kind === "ace") {
+    body = {
+      id: EDIT_ID, label: $("alabel").value.trim(), email: $("aemail").value.trim(),
+      password: $("apass").value, api_key: $("akey").value.trim(),
+      note: $("anote").value.trim(), use: $("ause").checked,
+      region: $("aregion").value, project_id: $("aproj").value.trim(),
+      net_mumbai: $("anetmum").value.trim(), net_noida: $("anetnoi").value.trim(),
+    };
+    if (!EDIT_ID && (!body.email || !body.password)) { toast("Email and password required"); return; }
+  } else if (CUR.kind === "hostzop") {
+    body = {
+      id: EDIT_ID, label: $("alabel").value.trim(), apikey: $("akey2").value.trim(),
+      billing_account_id: $("ahzbill").value.trim(), location: $("ahzloc").value.trim(),
+      note: $("anote").value.trim(), use: $("ause").checked,
+    };
+    if (!EDIT_ID && !body.apikey) { toast("API key required"); return; }
+  } else {
+    body = {
+      id: EDIT_ID, label: $("alabel").value.trim(), apikey: $("akey2").value.trim(),
+      zone_id: $("aexzone").value.trim(), subnet_id: $("aexsub").value.trim(),
+      note: $("anote").value.trim(), use: $("ause").checked,
+    };
+    if (!EDIT_ID && !body.apikey) { toast("API key required"); return; }
+  }
   let d;
-  try { d = await POST("/api/accounts/add", body); }
+  try { d = await POST(CUR.api + "/accounts/add", body); }
   catch (e) { toast("Failed"); return; }
   if (d.ok) { toast("Saved"); resetForm(); loadAccounts(); }
   else toast(d.msg || "Failed");
@@ -171,29 +206,40 @@ function editAccount(id) {
   if (!a) return;
   EDIT_ID = id;
   DETECT = null;
+  applyKind();
   $("formTitle").textContent = "Edit account";
   $("alabel").value = a.label || "";
-  $("aemail").value = a.email || "";
-  $("apass").value = "";
-  $("akey").value = a.api_key || "";
   $("anote").value = a.note || "";
-  $("aregion").value = a.region || "ap-south-mum-2";
-  $("aproj").value = a.project_id || "";
-  $("anetmum").value = a.net_mumbai || "";
-  $("anetnoi").value = a.net_noida || "";
-  $("detectBox").style.display = "none";
+  if (CUR.kind === "ace") {
+    $("aemail").value = a.email || "";
+    $("apass").value = "";
+    $("akey").value = a.api_key || "";
+    $("aregion").value = a.region || "ap-south-mum-2";
+    $("aproj").value = a.project_id || "";
+    $("anetmum").value = a.net_mumbai || "";
+    $("anetnoi").value = a.net_noida || "";
+    $("detectBox").style.display = "none";
+  } else if (CUR.kind === "hostzop") {
+    $("akey2").value = "";
+    $("ahzbill").value = a.billing_account_id || "";
+    $("ahzloc").value = a.location || "";
+  } else {
+    $("akey2").value = "";
+    $("aexzone").value = a.zone_id || "";
+    $("aexsub").value = a.subnet_id || "";
+  }
   $("cfg").scrollTop = 0;
 }
 
 async function delAccount(id) {
   if (!confirm("Delete this account?")) return;
-  const d = await POST("/api/accounts/delete", { id });
+  const d = await POST(CUR.api + "/accounts/delete", { id });
   toast(d.ok ? "Deleted" : (d.msg || "Failed"));
   loadAccounts();
 }
 
 async function activate(id) {
-  const d = await POST("/api/accounts/activate", { id });
+  const d = await POST(CUR.api + "/accounts/activate", { id });
   toast(d.ok ? "Active account switched" : (d.msg || "Failed"));
   loadAccounts();
 }
