@@ -65,6 +65,8 @@ acl Safe_ports port 488
 acl Safe_ports port 591
 acl Safe_ports port 777
 acl CONNECT method CONNECT
+http_access deny !Safe_ports
+http_access deny CONNECT !SSL_ports
 http_access allow proxy_users
 http_access deny all
 http_port 3128
