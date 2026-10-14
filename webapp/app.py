@@ -34,7 +34,7 @@ import spot_server as sw            # original script - untouched
 import hostzop_core as hz           # new module - hostzop.com web port (own code)
 import excloud_core as ex           # new module - excloud.in web port (own code)
 import gcore_core as gc             # new module - gcore.com web port (own code)
-from deploy_core import (load_plans, save_plan, plan_timer, fetch_ondemand_price,
+from deploy_core import (load_plans, save_plan, plan_timer, plan_deadline, fetch_ondemand_price,
                          users_from_txt, FLV_SPEC, REGION_KEYS, EMAIL, PASSWD, CREDS_FILE)
 
 HOST = os.environ.get("ACEWEB_HOST", "0.0.0.0")
@@ -56,6 +56,80 @@ STATIC_FILES = {"/": "index.html", "/all": "all.html", "/style.css": "style.css"
                 "/gcore.css": "gcore.css", "/gcore-logo.svg": "gcore-logo.svg"}
 
 ACCOUNTS_FILE = SPOT_DIR / "accounts.json"
+
+ACCOUNTS_FILE = SPOT_DIR / "accounts.json"
+
+# ============================== auto-delete timers ==============================
+# One timer per provider. Fires ~1 min before the full hour so the bill stays
+# at exactly the set number of hours (never spills into an extra hour).
+TIMER_FILE = SPOT_DIR / "auto_timers.json"
+
+
+def load_timers():
+    try:
+        if TIMER_FILE.exists():
+            d = json.loads(TIMER_FILE.read_text("utf-8"))
+            return d if isinstance(d, list) else []
+    except Exception:
+        pass
+    return []
+
+
+def save_timers(lst):
+    try:
+        TIMER_FILE.write_text(json.dumps(lst, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def set_timer(kind, hours):
+    try:
+        hours = float(hours or 0)
+    except Exception:
+        return
+    if hours <= 0:
+        return
+    deadline = time.time() + max(60, int(hours * 3600) - 60)
+    lst = [t for t in load_timers() if t.get("kind") != kind]
+    lst.append({"kind": kind, "hours": int(hours), "deadline": deadline})
+    save_timers(lst)
+    et = time.strftime("%H:%M", time.localtime(deadline))
+    push(f"AUTO-DELETE [{kind.upper()}] set: {int(hours)}h -> delete ~{et} "
+         f"(1 min before, bill-safe)", "warn")
+
+
+def timer_deadline(kind):
+    for t in load_timers():
+        if t.get("kind") == kind:
+            return t.get("deadline")
+    return None
+
+
+def timer_loop():
+    while True:
+        time.sleep(15)
+        try:
+            now = time.time()
+            lst = load_timers()
+            due = [t for t in lst if (t.get("deadline") or 0) <= now]
+            if due:
+                for t in due:
+                    kind = t.get("kind")
+                    push(f"AUTO-DELETE [{str(kind).upper()}] time up -> deleting...", "warn")
+                    try:
+                        if kind == "hz" and hz_key():
+                            hz.delete_all(hz_key())
+                        elif kind == "ex" and ex_key():
+                            ex.delete_all(ex_key())
+                        elif kind == "gc" and gc_cfg().get("apikey"):
+                            gc.delete_all(gc_key(), gc_cfg())
+                    except BaseException as e:
+                        push(f"AUTO-DELETE [{kind}] error: {e}", "error")
+                save_timers([t for t in lst if (t.get("deadline") or 0) > now])
+                refresh_state()
+        except BaseException:
+            pass
+
 
 # ============================== log buffer ==============================
 LOGS = []
@@ -366,6 +440,7 @@ def job_hz_create(body):
         for ln in lines:
             push(f"READY {ln}", "ok")
         if lines:
+            set_timer("hz", body.get("hours"))
             out = SPOT_DIR / "hostzop_proxy.txt"
             with open(out, "a") as f:
                 for ln in lines:
@@ -548,6 +623,7 @@ def job_ex_create(body):
         for ln in lines:
             push(f"READY {ln}", "ok")
         if lines:
+            set_timer("ex", body.get("hours"))
             out = SPOT_DIR / "excloud_proxy.txt"
             with open(out, "a") as f:
                 for ln in lines:
@@ -716,6 +792,7 @@ def job_gc_create(body):
         for ln in lines:
             push(f"READY {ln}", "ok")
         if lines:
+            set_timer("gc", body.get("hours"))
             out = SPOT_DIR / "gcore_proxy.txt"
             with open(out, "a") as f:
                 for ln in lines:
@@ -1035,10 +1112,13 @@ def job_create_proxy(code, size_idx, count, hours, port, user, pwd, billing_lbl)
 
 
 def schedule_timer(hours, kind):
-    push(f"Auto-delete scheduled: {hours}h (server must keep running)", "warn")
+    wait = max(60, int(float(hours) * 3600) - 60)
+    et = time.strftime("%H:%M", time.localtime(time.time() + wait))
+    push(f"AUTO-DELETE [{kind.upper()}] set: {int(float(hours))}h -> delete ~{et} "
+         f"(1 min before, bill-safe). Server must keep running.", "warn")
 
     def worker():
-        time.sleep(int(float(hours) * 3600))
+        time.sleep(wait)
         push("Auto-delete timer expired. Cleaning up...", "warn")
         try:
             do_login()
@@ -1239,12 +1319,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/hostzop/state":
             st = hz.state(hz_key())
             pw = load_hz_pw()
+            dl = timer_deadline("hz")
             for row in st.get("rows", []):
+                row["deadline"] = dl
                 c = pw.get(row.get("uuid") or "")
                 if c:
                     row["root_password"] = c.get("root_password", "")
-                    row["proxy_user"] = c.get("proxy_user", "")
-                    row["proxy_pass"] = c.get("proxy_pass", "")
             self._json(st)
             return
 
@@ -1284,7 +1364,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/excloud/state":
-            self._json(ex.state(ex_key()))
+            st = ex.state(ex_key())
+            dl = timer_deadline("ex")
+            for row in st.get("rows", []):
+                row["deadline"] = dl
+            self._json(st)
             return
 
         if path == "/api/excloud/snaps":
@@ -1318,7 +1402,12 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/gcore/state":
-            self._json(gc.state(gc_key(), gc_cfg()))
+            st = gc.state(gc_key(), gc_cfg())
+            dl = timer_deadline("gc")
+            if isinstance(st, dict):
+                for row in st.get("rows", []):
+                    row["deadline"] = dl
+            self._json(st)
             return
 
         if path == "/api/gcore/output":
@@ -1345,13 +1434,15 @@ class Handler(BaseHTTPRequestHandler):
                     counts["active"] += 1
                 pricing = (f"Rs.{float(prc):.2f}/hr" if prc
                            else ("hrly" if cat == "proxy" else "auto"))
+                nm = inst.get("name") or "?"
                 rows.append({
                     "id": inst.get("id", ""), "region": rid, "region_label": rlabel,
-                    "status": status, "name": inst.get("name") or "?", "ip": pub_ip(inst),
+                    "status": status, "name": nm, "ip": pub_ip(inst),
                     "size": size, "cat": cat,
                     "type": {"spot": "SPOT", "ondemand": "ON-DEMAND", "proxy": "PROXY"}[cat],
                     "pricing": pricing,
-                    "plan": plan_timer(plans, inst.get("name") or "?", inst.get("created")),
+                    "plan": plan_timer(plans, nm, inst.get("created")),
+                    "deadline": plan_deadline(plans, nm, inst.get("created")),
                 })
             self._json({"logged": STATE["logged"], "busy": BUSY,
                         "balance": STATE["balance"], "counts": counts, "instances": rows})
@@ -1845,6 +1936,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     push("AceCloud Web Manager v2 starting...", "sys")
     threading.Thread(target=lambda: (do_login(), refresh_state()), daemon=True).start()
+    threading.Thread(target=timer_loop, daemon=True).start()
     print("\n" + "=" * 58)
     print("  AceCloud Web Manager v2")
     print(f"  LOCAL :  http://127.0.0.1:{PORT}")

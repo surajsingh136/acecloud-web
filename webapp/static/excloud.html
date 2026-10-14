@@ -28,6 +28,8 @@
       <input id="c_name" class="in" value="exproxy">
       <label class="gap">Count:</label>
       <input id="c_count" class="in c-sm" type="number" min="1" max="100" value="1">
+      <label class="gap">Hours:</label>
+      <input id="c_hours" class="in c-sm" type="number" min="1" max="120" value="3">
       <label class="gap">Disk GB:</label>
       <input id="c_disk" class="in c-xs" type="number" min="10" value="25">
     </div>
@@ -80,8 +82,6 @@
       <span id="stats" class="stats">Servers: --</span>
       <div class="tb-r">
         <button id="btn_refresh" class="btn sm">Refresh</button>
-        <button id="btn_copyip" class="btn sm">Copy IP</button>
-        <button id="btn_copyproxy" class="btn sm">Copy Proxy</button>
         <button id="btn_delsel" class="btn sm del">Delete Selected</button>
       </div>
     </div>
@@ -89,7 +89,7 @@
       <table id="srv">
         <thead>
           <tr>
-            <th class="chk"></th><th>Name</th><th>IP</th><th>Status</th>
+            <th class="chk"></th><th>Name</th><th>Time left</th><th>IP</th><th>Status</th>
             <th>OS</th><th>Size</th><th>Proxy</th><th>Created</th>
           </tr>
         </thead>

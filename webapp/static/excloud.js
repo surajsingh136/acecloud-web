@@ -172,6 +172,7 @@ async function createServers() {
     template: template,
   };
   if (template) body.template = template;
+  body.hours = parseInt(($("c_hours") && $("c_hours").value) || "3", 10);
   let d; try { d = await POST("/api/excloud/create", body); } catch (e) { toast("Failed"); return; }
   if (d.ok) { toast("Creating... watch the log"); }
   else toast(d.msg || "Failed");
@@ -186,14 +187,16 @@ async function loadServers() {
   let d; try { d = await J("/api/excloud/state"); } catch (e) { return; }
   ROWS = d.rows || [];
   if (!ROWS.length) {
-    $("srvBody").innerHTML = '<tr><td colspan="8" class="empty">No servers. Create some above.</td></tr>';
+    $("srvBody").innerHTML = '<tr><td colspan="9" class="empty">No servers. Create some above.</td></tr>';
   } else {
     $("srvBody").innerHTML = ROWS.map((r, i) => `
       <tr data-i="${i}">
         <td class="chk"><input type="checkbox" class="rowchk" data-i="${i}"></td>
-        <td>${esc(r.name)}</td><td>${esc(r.ip || "-")}</td>
+        <td>${esc(r.name)}</td>
+        <td class="cd" data-dl="${r.deadline || 0}">-</td>
+        <td class="cp" title="click to copy IP" onclick="cpTxt('${esc(r.ip || "")}')">${esc(r.ip || "-")}</td>
         <td>${esc(r.status)}</td><td>${esc(r.os)}</td><td>${esc(r.size)}</td>
-        <td>${esc(proxyLine(r) || "-")}</td><td>${esc(r.created)}</td>
+        <td class="cp" title="click to copy proxy" onclick="cpTxt('${esc(proxyLine(r) || "")}')">${esc(proxyLine(r) || "-")}</td><td>${esc(r.created)}</td>
       </tr>`).join("");
   }
   const running = ROWS.filter(r => ["running", "active", "ready"].includes((r.status || "").toLowerCase())).length;
@@ -212,11 +215,24 @@ document.addEventListener("change", (e) => {
 });
 function pickRow() { const s = selectedRows(); return s[0] || ROWS[0]; }
 function copyText(txt, label) {
-  if (!txt) { toast("No value"); return; }
+  if (!txt) { toast("Nothing to copy"); return; }
   navigator.clipboard.writeText(txt).then(() => toast(label + ": " + txt), () => toast("Copy failed"));
 }
-function copyIP() { const r = pickRow(); if (!r) { toast("No server"); return; } copyText(r.ip, "Copied IP"); }
-function copyProxy() { const r = pickRow(); if (!r) { toast("No server"); return; } copyText(proxyLine(r), "Copied proxy"); }
+function cpTxt(txt) { if (txt) copyText(txt, "Copied"); }
+/* live countdown: decreasing time left until auto-delete */
+function fmtCd(ms) {
+  if (!ms || ms <= 0) return "-";
+  let s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600); s %= 3600;
+  const m = Math.floor(s / 60); const ss = s % 60;
+  return `${h}h ${String(m).padStart(2, "0")}m ${String(ss).padStart(2, "0")}s`;
+}
+setInterval(() => {
+  document.querySelectorAll(".cd").forEach(el => {
+    const dl = parseFloat(el.dataset.dl) || 0;
+    el.textContent = fmtCd(dl * 1000 - Date.now());
+  });
+}, 1000);
 async function deleteSelected() {
   const sel = selectedRows();
   if (!sel.length) { toast("Select servers first"); return; }
@@ -314,8 +330,6 @@ function wire() {
   $("btn_test").addEventListener("click", testProxy);
   $("btn_open").addEventListener("click", openOutput);
   $("btn_refresh").addEventListener("click", loadServers);
-  $("btn_copyip").addEventListener("click", copyIP);
-  $("btn_copyproxy").addEventListener("click", copyProxy);
   $("btn_delsel").addEventListener("click", deleteSelected);
 }
 

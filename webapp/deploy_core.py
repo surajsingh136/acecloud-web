@@ -62,11 +62,25 @@ def plan_timer(plans, name, created_api):
         hours = pl.get("hours")
         if not hours:
             return f"used {used:.1f}h | end ?"
-        end = dt + timedelta(hours=float(hours))
-        end_loc = end.astimezone().strftime("%H:%M")
-        return f"{int(hours)}h | used {used:.1f}h | ~{end_loc}"
+        end = dt + timedelta(seconds=int(float(hours) * 3600) - 60)
+        end_loc = end.strftime("%H:%M")
+        return f"{int(hours)}h | used {used:.1f}h | del {end_loc}Z"
     except Exception:
         return "plan: -"
+
+
+def plan_deadline(plans, name, created_api):
+    """Epoch seconds (UTC) when this instance auto-deletes, or None."""
+    try:
+        pl = plans.get(name) or {}
+        created = pl.get("created") or created_api
+        hours = pl.get("hours")
+        if not created or not hours:
+            return None
+        dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+        return dt.timestamp() + int(float(hours) * 3600) - 60
+    except Exception:
+        return None
 
 
 def fetch_ondemand_price(flavor_name, os_type="linux"):

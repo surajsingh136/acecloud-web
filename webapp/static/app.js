@@ -23,6 +23,21 @@ const POST = (url, obj) => J(url, { method: "POST", headers: { "Content-Type": "
 /* ---------------- ui helpers ---------------- */
 function toast(m) { const t = $("toast"); t.textContent = m; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 1800); }
 function copyTxt(t, msg) { navigator.clipboard.writeText(t).then(() => toast(msg || "Copied!")); }
+function cpTxt(t) { if (t) copyTxt(t, "Copied"); }
+/* live countdown: decreasing time left until auto-delete */
+function fmtCd(ms) {
+  if (!ms || ms <= 0) return "-";
+  let s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600); s %= 3600;
+  const m = Math.floor(s / 60); const ss = s % 60;
+  return `${h}h ${String(m).padStart(2, "0")}m ${String(ss).padStart(2, "0")}s`;
+}
+setInterval(() => {
+  document.querySelectorAll(".cd").forEach(el => {
+    const dl = parseFloat(el.dataset.dl) || 0;
+    el.textContent = fmtCd(dl * 1000 - Date.now());
+  });
+}, 1000);
 function hide(id) { $(id).style.display = "none"; }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
@@ -59,13 +74,16 @@ async function pollState() {
   ROWS = d.instances;
   SEL = new Set([...SEL].filter(i => i < ROWS.length));
   $("tb").innerHTML = ROWS.map((r, i) => `
-    <tr class="${SEL.has(i) ? "sel" : ""}" onclick="tog(${i})" ondblclick="copyTxt('${esc(r.ip)}','IP copied')">
+    <tr class="${SEL.has(i) ? "sel" : ""}" onclick="tog(${i})">
       <td onclick="event.stopPropagation()"><input type="checkbox" ${SEL.has(i) ? "checked" : ""} onchange="tog(${i})"></td>
       <td class="st ${esc(r.status)}">&#9679; ${esc(r.status)}</td>
-      <td>${esc(r.name)}</td><td>${esc(r.ip)}</td><td>${esc(r.size)}</td>
+      <td>${esc(r.name)}</td>
+      <td class="cd" data-dl="${r.deadline || 0}">-</td>
+      <td class="cp" title="click to copy IP" onclick="event.stopPropagation();cpTxt('${esc(r.ip)}')">${esc(r.ip)}</td>
+      <td>${esc(r.size)}</td>
       <td>${esc(r.region_label)}</td><td class="${esc(r.type)}">${esc(r.type)}</td>
       <td>${esc(r.pricing)}</td><td>${esc(r.plan)}</td>
-    </tr>`).join("") || `<tr><td colspan="9" style="text-align:center;color:#8a97a3;height:238px;vertical-align:middle">No instances (or not logged in)</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="10" style="text-align:center;color:#8a97a3;height:238px;vertical-align:middle">No instances (or not logged in)</td></tr>`;
 
   $("stats").textContent = `Servers: ${d.counts.total}   |   SPOT: ${d.counts.spot}   |   ON-DEMAND: ${d.counts.ondemand}   |   PROXY: ${d.counts.proxy}`;
   const bal = d.balance == null ? "Balance: --" : `Balance: Rs.${(+d.balance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;

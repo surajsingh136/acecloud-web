@@ -56,6 +56,9 @@ td.st { font-weight: bold; }
 .ERROR, .SUSPENDED, .STOPPED { color: var(--red); }
 .BUILD, .REBOOT, .HARD_REBOOT, .RESIZE { color: var(--amber); }
 .SHUTOFF, .PAUSED, .UNKNOWN { color: #888; }
+td.cd { white-space: nowrap; font-weight: bold; color: #0b6b3a; }
+td.cp { cursor: pointer; }
+td.cp:hover { color: #E74E37; }
 
 /* activity log */
 #logbox { margin: 14px 12px; background: #fff; border: 1px solid var(--line); border-radius: 3px; height: 170px; overflow: auto; padding: 8px; font-family: Consolas, monospace; font-size: 12.5px; }

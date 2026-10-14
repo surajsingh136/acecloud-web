@@ -44,7 +44,6 @@
     <button id="btnDelAll" class="del" onclick="delAll()">Delete All (zero bill)</button>
     <button id="btnDelSel" class="del" onclick="delSel()">Delete Selected</button>
     <button id="btnSnap" onclick="openSnap()">Snapshot</button>
-    <button onclick="copyAllIps()">Copy All IPs</button>
     <button onclick="refreshAll()">Refresh</button>
   </div>
   <div class="row">
@@ -56,9 +55,6 @@
 
 <div id="stats">Servers: --</div>
 <div style="margin:0 12px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
-  <button class="del" onclick="copyIP()">Copy IP</button>
-  <button class="del" onclick="copyPass()">Copy Password</button>
-  <button class="del" onclick="copyProxy()">Copy Proxy</button>
   <button class="del" onclick="openConsole()">Open VNC Console</button>
 </div>
 
@@ -66,7 +62,7 @@
 <table>
 <thead><tr>
   <th><input type="checkbox" id="ckall" onclick="ckAll()"></th>
-  <th>Status</th><th>Name</th><th>IP</th><th>Size</th><th>Region</th><th>Type</th><th>Pricing</th><th>Plan</th>
+  <th>Status</th><th>Name</th><th>Time left</th><th>IP</th><th>Size</th><th>Region</th><th>Type</th><th>Pricing</th><th>Plan</th>
 </tr></thead>
 <tbody id="tb"></tbody>
 </table>
