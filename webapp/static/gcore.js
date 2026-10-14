@@ -186,7 +186,7 @@ async function loadServers() {
       <tr data-i="${i}">
         <td class="chk"><input type="checkbox" class="rowchk" data-i="${i}"></td>
         <td>${esc(r.name)}</td>
-        <td class="cd" data-dl="${r.deadline || 0}">-</td>
+        <td class="cd" data-dl="${r.deadline || 0}">${fmtCd((r.deadline || 0) * 1000 - Date.now())}</td>
         <td class="cp" title="click to copy IP" onclick="cpTxt('${esc(r.ip || "")}')">${esc(r.ip || "-")}</td>
         <td>${esc(r.status)}</td><td>${esc(r.os)}</td><td>${esc(r.size)}</td>
         <td class="cp" title="click to copy proxy" onclick="cpTxt('${esc(proxyLine(r) || "")}')">${esc(proxyLine(r) || "-")}</td><td>${esc(r.created)}</td>

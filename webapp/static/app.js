@@ -77,7 +77,7 @@ async function pollState() {
       <td onclick="event.stopPropagation()"><input type="checkbox" ${SEL.has(i) ? "checked" : ""} onchange="tog(${i})"></td>
       <td class="st ${esc(r.status)}">&#9679; ${esc(r.status)}</td>
       <td>${esc(r.name)}</td>
-      <td class="cd" data-dl="${r.deadline || 0}">-</td>
+      <td class="cd" data-dl="${r.deadline || 0}">${fmtCd((r.deadline || 0) * 1000 - Date.now())}</td>
       <td class="cp" title="click to copy IP" onclick="event.stopPropagation();cpTxt('${esc(r.ip)}')">${esc(r.ip)}</td>
       <td>${esc(r.size)}</td>
       <td>${esc(r.region_label)}</td><td class="${esc(r.type)}">${esc(r.type)}</td>
