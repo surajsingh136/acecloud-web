@@ -33,6 +33,7 @@ import acecloud_spot as ac          # original script - untouched
 import spot_server as sw            # original script - untouched
 import hostzop_core as hz           # new module - hostzop.com web port (own code)
 import excloud_core as ex           # new module - excloud.in web port (own code)
+import gcore_core as gc             # new module - gcore.com web port (own code)
 from deploy_core import (load_plans, save_plan, plan_timer, fetch_ondemand_price,
                          users_from_txt, FLV_SPEC, REGION_KEYS, EMAIL, PASSWD, CREDS_FILE)
 
@@ -50,7 +51,9 @@ STATIC_FILES = {"/": "index.html", "/all": "all.html", "/style.css": "style.css"
                 "/hostzop.js": "hostzop.js", "/hostzop.css": "hostzop.css",
                 "/hostzop-logo.svg": "hostzop-logo.svg",
                 "/excloud": "excloud.html", "/excloud.js": "excloud.js",
-                "/excloud.css": "excloud.css", "/excloud-logo.svg": "excloud-logo.svg"}
+                "/excloud.css": "excloud.css", "/excloud-logo.svg": "excloud-logo.svg",
+                "/gcore": "gcore.html", "/gcore.js": "gcore.js",
+                "/gcore.css": "gcore.css", "/gcore-logo.svg": "gcore-logo.svg"}
 
 ACCOUNTS_FILE = SPOT_DIR / "accounts.json"
 
@@ -74,6 +77,7 @@ _hook(ac)
 _hook(sw)
 _hook(hz)
 _hook(ex)
+_hook(gc)
 
 # ============================== app state ==============================
 BUSY = False
@@ -608,6 +612,132 @@ def job_ex_snapshot(vm_id, vm_name, name):
         push(f"Snapshot saved: {snaps[-1]['name']}", "ok")
     except BaseException as e:
         push(f"EXCLOUD SNAPSHOT ERROR: {e}", "error")
+    finally:
+        end()
+
+
+# ============================== Gcore (gcore.com) ==============================
+# Gcore uses an API key. The default account comes from the GCORE_APIKEY env
+# (read-only); extra accounts come from GCORE_ACCOUNTS or the UI.
+GC_FILE = SPOT_DIR / "gcore.json"
+GC_ACTIVE = "default"
+
+
+def _env_gc():
+    out = []
+    key = os.environ.get("GCORE_APIKEY", "").strip()
+    if key:
+        out.append({"id": "default", "label": "Gcore",
+                    "apikey": key,
+                    "project_id": os.environ.get("GCORE_PROJECT_ID", "").strip(),
+                    "region_id": os.environ.get("GCORE_REGION_ID", "").strip() or "108",
+                    "note": "from env", "source": "env"})
+    raw = os.environ.get("GCORE_ACCOUNTS", "").strip()
+    if raw:
+        try:
+            data = json.loads(raw)
+        except Exception:
+            data = []
+        for a in (data if isinstance(data, list) else []):
+            if isinstance(a, dict) and a.get("apikey"):
+                out.append({"id": str(a.get("id") or ("gc_" + uuid.uuid4().hex[:8])),
+                            "label": str(a.get("label") or "Gcore"),
+                            "apikey": str(a["apikey"]),
+                            "project_id": str(a.get("project_id") or ""),
+                            "region_id": str(a.get("region_id") or "108"),
+                            "note": str(a.get("note") or ""), "source": "envlist"})
+    return out
+
+
+def load_gc_accounts():
+    accts, seen = [], set()
+    for a in _env_gc():
+        if a["id"] in seen:
+            a["id"] = "gc_" + uuid.uuid4().hex[:8]
+        seen.add(a["id"])
+        accts.append(a)
+    try:
+        if GC_FILE.exists():
+            for a in (json.loads(GC_FILE.read_text("utf-8")) or []):
+                if isinstance(a, dict) and a.get("apikey") and a.get("id") not in seen:
+                    a.setdefault("source", "file")
+                    seen.add(a.get("id"))
+                    accts.append(a)
+    except Exception:
+        pass
+    return accts
+
+
+def save_gc_accounts(accts):
+    data = [a for a in accts if a.get("source") == "file"]
+    try:
+        GC_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def find_gc_account(aid):
+    for a in load_gc_accounts():
+        if a.get("id") == aid:
+            return a
+    return None
+
+
+def active_gc():
+    accts = load_gc_accounts()
+    return (find_gc_account(GC_ACTIVE)
+            or next((a for a in accts if a.get("source") == "env"), None)
+            or (accts[0] if accts else None))
+
+
+def gc_cfg():
+    a = active_gc() or {}
+    return {"apikey": (a.get("apikey") or "").strip(),
+            "project_id": str(a.get("project_id") or "").strip(),
+            "region_id": str(a.get("region_id") or "").strip()}
+
+
+def gc_key():
+    return gc_cfg()["apikey"]
+
+
+def gc_meta(region_id=""):
+    cfg = gc_cfg()
+    if not cfg["apikey"]:
+        return {"ok": False, "msg": "No gcore account", "regions": [], "images": [],
+                "sizes": [], "project_id": "", "region_id": ""}
+    return gc.meta(cfg["apikey"], cfg, region_id=region_id)
+
+
+def job_gc_create(body):
+    try:
+        res = gc.create_proxies(gc_key(), body, int(body.get("count", 1) or 1))
+        lines = res.get("lines", [])
+        for ln in lines:
+            push(f"READY {ln}", "ok")
+        if lines:
+            out = SPOT_DIR / "gcore_proxy.txt"
+            with open(out, "a") as f:
+                for ln in lines:
+                    f.write(ln + "\n")
+            push(f"Saved {len(lines)} line(s) -> {out}", "ok")
+        for e in res.get("errors", []):
+            push(e, "warn")
+    except BaseException as e:
+        push(f"GCORE CREATE ERROR: {e}", "error")
+    finally:
+        end()
+
+
+def job_gc_delete(ids, is_all):
+    try:
+        cfg = gc_cfg()
+        if is_all:
+            gc.delete_all(gc_key(), cfg)
+        else:
+            gc.delete_vms(gc_key(), cfg, ids)
+    except BaseException as e:
+        push(f"GCORE DELETE ERROR: {e}", "error")
     finally:
         end()
 
@@ -1172,6 +1302,36 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"file": "excloud_proxy.txt", "text": txt})
             return
 
+        if path == "/api/gcore/accounts":
+            self._json({"active": GC_ACTIVE, "accounts": [{
+                "id": a["id"], "label": a.get("label") or "Gcore",
+                "apikey": a.get("apikey") or "", "has_key": bool(a.get("apikey")),
+                "project_id": a.get("project_id") or "", "region_id": a.get("region_id") or "",
+                "note": a.get("note") or "", "source": a.get("source", "file"),
+                "editable": a.get("source") == "file",
+            } for a in load_gc_accounts()]})
+            return
+
+        if path == "/api/gcore/meta":
+            q = parse_qs(urlparse(self.path).query)
+            self._json(gc_meta((q.get("region") or [""])[0]))
+            return
+
+        if path == "/api/gcore/state":
+            self._json(gc.state(gc_key(), gc_cfg()))
+            return
+
+        if path == "/api/gcore/output":
+            p = SPOT_DIR / "gcore_proxy.txt"
+            txt = ""
+            if p.exists():
+                try:
+                    txt = p.read_text("utf-8", errors="replace")
+                except Exception:
+                    txt = ""
+            self._json({"file": "gcore_proxy.txt", "text": txt})
+            return
+
         if path == "/api/state":
             plans = load_plans()
             rows, counts = [], {"spot": 0, "ondemand": 0, "proxy": 0, "active": 0, "total": 0}
@@ -1233,7 +1393,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- POST ----------
     def do_POST(self):
-        global ACTIVE_ID, HZ_ACTIVE, EX_ACTIVE
+        global ACTIVE_ID, HZ_ACTIVE, EX_ACTIVE, GC_ACTIVE
         if not self._authed():
             self._json({"error": "wrong pin"}, 401)
             return
@@ -1578,6 +1738,95 @@ class Handler(BaseHTTPRequestHandler):
                              args=(vm_id, (b.get("vm_name") or "").strip(),
                                    (b.get("name") or "").strip())).start()
             self._json({"ok": True})
+            return
+
+        if path == "/api/gcore/accounts/add":
+            label = (b.get("label") or "").strip()
+            key = (b.get("apikey") or "").strip()
+            pid = str(b.get("project_id") or "").strip()
+            rid = str(b.get("region_id") or "").strip()
+            note = (b.get("note") or "").strip()
+            eid = (b.get("id") or "").strip()
+            accts = load_gc_accounts()
+            if eid:
+                tgt = next((a for a in accts if a.get("id") == eid), None)
+                if not tgt or tgt.get("source") != "file":
+                    self._json({"ok": False, "msg": "This account is read-only"}, 400)
+                    return
+                if label:
+                    tgt["label"] = label
+                if key:
+                    tgt["apikey"] = key
+                tgt["project_id"] = pid
+                tgt["region_id"] = rid
+                tgt["note"] = note
+                save_gc_accounts(accts)
+                new_id = eid
+            else:
+                if not key:
+                    self._json({"ok": False, "msg": "API key required"}, 400)
+                    return
+                new_id = "gc_" + uuid.uuid4().hex[:8]
+                accts.append({"id": new_id, "label": label or "Gcore", "apikey": key,
+                              "project_id": pid, "region_id": rid, "note": note,
+                              "source": "file"})
+                save_gc_accounts(accts)
+            if b.get("use"):
+                GC_ACTIVE = new_id
+            self._json({"ok": True, "id": new_id})
+            return
+
+        if path == "/api/gcore/accounts/delete":
+            eid = (b.get("id") or "").strip()
+            accts = load_gc_accounts()
+            tgt = next((a for a in accts if a.get("id") == eid), None)
+            if not tgt or tgt.get("source") != "file":
+                self._json({"ok": False, "msg": "Cannot delete this account"}, 400)
+                return
+            save_gc_accounts([a for a in accts if a.get("id") != eid])
+            if GC_ACTIVE == eid:
+                GC_ACTIVE = "default"
+            self._json({"ok": True})
+            return
+
+        if path == "/api/gcore/accounts/activate":
+            eid = (b.get("id") or "").strip()
+            if not find_gc_account(eid):
+                self._json({"ok": False, "msg": "No such account"}, 400)
+                return
+            GC_ACTIVE = eid
+            self._json({"ok": True})
+            return
+
+        if path == "/api/gcore/verify":
+            self._json(gc.verify((b.get("apikey") or "").strip()))
+            return
+
+        if path == "/api/gcore/create":
+            if not gc_key():
+                self._json({"ok": False, "msg": "Add/activate a gcore account first"}, 400)
+                return
+            if not begin():
+                self._json({"ok": False, "msg": "Busy..."}, 409)
+                return
+            threading.Thread(target=job_gc_create, daemon=True, args=(b,)).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/gcore/delete":
+            if not gc_key():
+                self._json({"ok": False, "msg": "No gcore account"}, 400)
+                return
+            if not begin():
+                self._json({"ok": False, "msg": "Busy..."}, 409)
+                return
+            threading.Thread(target=job_gc_delete, daemon=True,
+                             args=(b.get("ids") or [], bool(b.get("all")))).start()
+            self._json({"ok": True})
+            return
+
+        if path == "/api/gcore/testproxy":
+            self._json(gc.test_proxy(b.get("line") or ""))
             return
 
         if path == "/api/login":

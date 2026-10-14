@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gcore - Probe Free Proxy</title>
+<link rel="stylesheet" href="/gcore.css">
+</head>
+<body>
+<header class="bar">
+  <div class="left">
+    <img id="logo" src="/gcore-logo.svg" alt="Gcore">
+    <span class="brand">GCORE</span>
+    <span class="sub">Proxy Maker &nbsp;|&nbsp; Dashboard</span>
+  </div>
+  <div class="right">
+    <label class="lbl">Account</label>
+    <select id="gc_acct" class="acct"></select>
+    <button id="btn_keys" class="btn sm">Keys</button>
+    <span class="tag">apikey &nbsp;|&nbsp; squid auto &nbsp;|&nbsp; eu regions</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="panel ctrl">
+    <div class="row">
+      <label>Name:</label>
+      <input id="c_name" class="in" value="gcoreproxy">
+      <label class="gap">Count:</label>
+      <input id="c_count" class="in c-sm" type="number" min="1" max="100" value="1">
+      <label class="gap">Disk GB:</label>
+      <input id="c_disk" class="in c-xs" type="number" min="10" value="10">
+    </div>
+
+    <div class="row">
+      <label>Region:</label>
+      <select id="c_region" class="in wide"></select>
+    </div>
+
+    <div class="row">
+      <label>Image:</label>
+      <select id="c_image" class="in wide"></select>
+    </div>
+
+    <div class="row">
+      <label>Instance Size:</label>
+      <select id="c_type" class="in wide"></select>
+    </div>
+
+    <div class="row">
+      <label>Proxy User:</label>
+      <input id="c_user" class="in" value="ajay">
+      <label class="gap">Proxy Pass:</label>
+      <input id="c_pass" class="in" value="ajay">
+      <label class="gap">Root Pass:</label>
+      <input id="c_root" class="in" value="Gc@123456">
+    </div>
+
+    <div class="row">
+      <label>Proxy Port:</label>
+      <input id="c_port" class="in c-xs" type="number" value="3128">
+    </div>
+
+    <div class="btns">
+      <button id="btn_create" class="btn create">Create Proxies</button>
+      <button id="btn_delall" class="btn del">Delete All</button>
+      <button id="btn_test" class="btn">Test Proxy</button>
+      <button id="btn_open" class="btn">Open Output</button>
+      <button id="btn_refresh" class="btn">Refresh</button>
+    </div>
+
+    <div class="row">
+      <label>Test:</label>
+      <input id="c_testline" class="in wide" placeholder="ip:port:user:pass">
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="toolbar">
+      <span id="stats" class="stats">Instances: --</span>
+      <div class="tb-r">
+        <button id="btn_copyip" class="btn sm">Copy IP</button>
+        <button id="btn_copyproxy" class="btn sm">Copy Proxy</button>
+        <button id="btn_delsel" class="btn sm del">Delete Selected</button>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table id="srv">
+        <thead>
+          <tr>
+            <th class="chk"></th><th>Name</th><th>IP</th><th>Status</th>
+            <th>OS</th><th>Size</th><th>Proxy</th><th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="srvBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="logwrap">
+    <div id="log" class="log"></div>
+  </section>
+
+</main>
+
+<footer class="statusbar"><span id="balance">Gcore: --</span></footer>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head"><span id="modal-title">Title</span><button id="modal-x" class="btn sm">X</button></div>
+    <div id="modal-body" class="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="/gcore.js"></script>
+</body>
+</html>

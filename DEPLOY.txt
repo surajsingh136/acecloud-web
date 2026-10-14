@@ -42,6 +42,8 @@ STEP 2 - Deploy on Render.com
       ACECLOUD_PASSWD = your acecloud password
       HOSTZOP_APIKEY  = (optional) your hostzop.com API key
       EXCLOUD_APIKEY  = (optional) your excloud.in API key (sk-excloud-...)
+      GCORE_APIKEY    = (optional) your gcore.com API key
+      GCORE_REGION_ID = (optional) your gcore region id (default 108 = Mumbai)
 4. Let it deploy. You'll get a live URL:
       https://acecloud-web.onrender.com
 
@@ -90,6 +92,23 @@ EXCLOUD  (/excloud)
   Delete Selected / Delete All stops billing. Snapshots create clone templates.
 - Proxy list is appended to spot/excloud_proxy.txt (Linux) on the server.
 - API bases: https://compute.excloud.in  +  https://iam.excloud.in  (Bearer auth).
+
+--------------------------------------------------------
+GCORE  (/gcore)
+--------------------------------------------------------
+- Open  https://<your-app>.onrender.com/all  ->  click the Gcore card (next to ExCloud).
+  It opens  https://<your-app>.onrender.com/gcore  (Gcore manager).
+- Gcore uses an API key. In the Keys dialog paste the API key, optionally Project id /
+  Region id (default 108 = Mumbai), then "Verify key" and "Save account".
+- The default gcore account comes from the GCORE_APIKEY env var (read-only).
+  Extra accounts are saved to spot/gcore.json (ephemeral). To keep them permanently
+  set GCORE_ACCOUNTS to a JSON list, e.g.:
+      GCORE_ACCOUNTS=[{"label":"Main","apikey":"XXXX","project_id":"371709","region_id":"108"}]
+- Pick Region + Image + Instance Size + Disk GB -> creates Ubuntu Squid proxies
+  (ip:port:user:pass) or Windows RDP servers. Delete Selected / Delete All stops billing.
+- Proxy list is appended to spot/gcore_proxy.txt (Linux) on the server.
+- API base: https://api.gcore.com/cloud  (Authorization: APIKey <key>).
+- Note: prices may be hidden if billing is not enabled on the account (rate shows blank).
 
 --------------------------------------------------------
 IMPORTANT NOTES

@@ -11,6 +11,8 @@ const SITES = [
     desc: "Proxy & RDP server maker (API key login)", config: true, url: "/hostzop", api: "/api/hostzop" },
   { id: "excloud", kind: "excloud", name: "ExCloud", logo: "/excloud-logo.svg",
     desc: "Indian cloud proxy & RDP VMs (API key login)", config: true, url: "/excloud", api: "/api/excloud" },
+  { id: "gcore", kind: "gcore", name: "Gcore", logo: "/gcore-logo.svg",
+    desc: "Global cloud proxy VMs (API key login)", config: true, url: "/gcore", api: "/api/gcore" },
   // Example for future websites:
   // { id: "other", name: "Other Tool", logo: "/logo.svg",
   //   desc: "Short description", config: false, url: "https://example.com" },
@@ -79,6 +81,7 @@ function applyKind() {
   $("fieldsKey").style.display = k === "ace" ? "none" : "";
   $("fieldsHz").style.display = k === "hostzop" ? "" : "none";
   $("fieldsEx").style.display = k === "excloud" ? "" : "none";
+  const fg = $("fieldsGc"); if (fg) fg.style.display = k === "gcore" ? "" : "none";
 }
 
 function resetForm() {
@@ -87,8 +90,9 @@ function resetForm() {
   applyKind();
   $("formTitle").textContent = "Add account";
   ["alabel", "aemail", "apass", "akey", "akey2", "anote", "aproj", "anetmum", "anetnoi",
-   "ahzbill", "ahzloc", "aexzone", "aexsub"].forEach(i => { if ($(i)) $(i).value = ""; });
+   "ahzbill", "ahzloc", "aexzone", "aexsub", "agcproj", "agcreg"].forEach(i => { if ($(i)) $(i).value = ""; });
   $("aregion").value = "ap-south-mum-2";
+  if ($("agcreg")) $("agcreg").value = "108";
   $("detectBox").style.display = "none";
   $("ause").checked = true;
 }
@@ -186,10 +190,17 @@ async function saveAccount() {
       note: $("anote").value.trim(), use: $("ause").checked,
     };
     if (!EDIT_ID && !body.apikey) { toast("API key required"); return; }
-  } else {
+  } else if (CUR.kind === "excloud") {
     body = {
       id: EDIT_ID, label: $("alabel").value.trim(), apikey: $("akey2").value.trim(),
       zone_id: $("aexzone").value.trim(), subnet_id: $("aexsub").value.trim(),
+      note: $("anote").value.trim(), use: $("ause").checked,
+    };
+    if (!EDIT_ID && !body.apikey) { toast("API key required"); return; }
+  } else {
+    body = {
+      id: EDIT_ID, label: $("alabel").value.trim(), apikey: $("akey2").value.trim(),
+      project_id: $("agcproj").value.trim(), region_id: $("agcreg").value.trim(),
       note: $("anote").value.trim(), use: $("ause").checked,
     };
     if (!EDIT_ID && !body.apikey) { toast("API key required"); return; }
@@ -223,10 +234,14 @@ function editAccount(id) {
     $("akey2").value = "";
     $("ahzbill").value = a.billing_account_id || "";
     $("ahzloc").value = a.location || "";
-  } else {
+  } else if (CUR.kind === "excloud") {
     $("akey2").value = "";
     $("aexzone").value = a.zone_id || "";
     $("aexsub").value = a.subnet_id || "";
+  } else {
+    $("akey2").value = "";
+    $("agcproj").value = a.project_id || "";
+    $("agcreg").value = a.region_id || "";
   }
   $("cfg").scrollTop = 0;
 }
