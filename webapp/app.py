@@ -1527,15 +1527,15 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/hostzop/state":
-            st = hz.state(hz_key())
+            hz_st = hz.state(hz_key())
             pw = load_hz_pw()
             dl = timer_deadline("hz")
-            for row in st.get("rows", []):
+            for row in hz_st.get("rows", []):
                 row["deadline"] = dl
                 c = pw.get(row.get("uuid") or "")
                 if c:
                     row["root_password"] = c.get("root_password", "")
-            self._json(st)
+            self._json(hz_st)
             return
 
         if path == "/api/hostzop/balance":
@@ -1574,11 +1574,11 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/excloud/state":
-            st = ex.state(ex_key())
+            ex_st = ex.state(ex_key())
             dl = timer_deadline("ex")
-            for row in st.get("rows", []):
+            for row in ex_st.get("rows", []):
                 row["deadline"] = dl
-            self._json(st)
+            self._json(ex_st)
             return
 
         if path == "/api/excloud/snaps":
@@ -1612,12 +1612,12 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/gcore/state":
-            st = gc.state(gc_key(), gc_cfg())
+            gc_st = gc.state(gc_key(), gc_cfg())
             dl = timer_deadline("gc")
-            if isinstance(st, dict):
-                for row in st.get("rows", []):
+            if isinstance(gc_st, dict):
+                for row in gc_st.get("rows", []):
                     row["deadline"] = dl
-            self._json(st)
+            self._json(gc_st)
             return
 
         if path == "/api/gcore/output":
