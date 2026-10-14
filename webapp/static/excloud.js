@@ -12,9 +12,8 @@ async function J(url, opts) {
   if (pin) opts.headers["X-Pin"] = pin;
   const r = await fetch(url, opts);
   if (r.status === 401) {
-    const p = prompt("Enter website PIN:");
-    if (p) { localStorage.setItem("acepin", p); return J(url, opts); }
-    throw new Error("no pin");
+    window.location.href = "/login";
+    throw new Error("login required");
   }
   return r.json();
 }

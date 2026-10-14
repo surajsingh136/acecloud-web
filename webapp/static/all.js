@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 /* ---- Sites shown on the hub. Add more websites here later. ---- */
 const SITES = [
   { id: "acecloud", kind: "ace", name: "AceCloud", logo: "/logo.svg",
-    desc: "Windows Spot & Linux proxy VMs", config: true, url: "/", api: "/api" },
+    desc: "Windows Spot & Linux proxy VMs", config: true, url: "/acecloud", api: "/api" },
   { id: "hostzop", kind: "hostzop", name: "Hostzop", logo: "/hostzop-logo.svg",
     desc: "Proxy & RDP server maker (API key login)", config: true, url: "/hostzop", api: "/api/hostzop" },
   { id: "excloud", kind: "excloud", name: "ExCloud", logo: "/excloud-logo.svg",
@@ -26,9 +26,8 @@ async function J(url, opts) {
   if (pin) opts.headers["X-Pin"] = pin;
   const r = await fetch(url, opts);
   if (r.status === 401) {
-    const p = prompt("Enter website PIN:");
-    if (p) { localStorage.setItem("acepin", p); return J(url, opts); }
-    throw new Error("no pin");
+    window.location.href = "/login";
+    throw new Error("login required");
   }
   return r.json();
 }
@@ -40,16 +39,56 @@ function hide(id) { $(id).style.display = "none"; }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
 /* ---------------- hub ---------------- */
+/* ---------------- hub ---------------- */
+let DEFAULT = "acecloud";
+
 function renderSites() {
-  $("sites").innerHTML = SITES.map(s => `
-    <div class="card" onclick="openSite('${s.id}')">
+  $("sites").innerHTML = SITES.map(s => {
+    const def = s.id === DEFAULT;
+    return `
+    <div class="card ${def ? "isdef" : ""}">
+      ${def ? '<span class="defbadge">DEFAULT</span>' : ""}
       <img class="logo" src="${s.logo}" alt="${esc(s.name)}">
       <div class="cname">${esc(s.name)}</div>
       <div class="cdesc">${esc(s.desc)}</div>
-      <span class="chip ${s.config ? "" : "go"}">${s.config ? "Configure &amp; run" : "Open"}</span>
-    </div>`).join("");
+      <div class="cbtns">
+        <button class="cbtn primary" onclick="window.location.href='${s.url}'">Open</button>
+        ${defaultBtn(s.id)}
+        ${s.config ? `<button class="mini" onclick="openConfig(SITES.find(x=>x.id==='${s.id}'))">Configure</button>` : ""}
+      </div>
+    </div>`;
+  }).join("");
 }
 
+function defaultBtn(id) {
+  return `<button class="mini" onclick="setDefault('${id}')">Set as default</button>`;
+}
+
+async function setDefault(id) {
+  try {
+    const d = await POST("/api/set-default", { host: id });
+    if (d && d.ok) { DEFAULT = id; renderSites(); toast("Default set to " + id); }
+    else toast((d && d.msg) || "Failed");
+  } catch (e) { toast("Failed"); }
+}
+
+function logout() {
+  fetch("/api/auth/logout", { method: "POST" }).finally(() => { location.href = "/"; });
+}
+
+async function boot() {
+  try {
+    const d = await J("/api/me");
+    if (d && d.ok) {
+      $("whoami").textContent = (d.name || d.email || "") + (d.role === "admin" ? " (admin)" : "");
+      if (d.role === "admin") $("adminLink").style.display = "";
+      DEFAULT = d.default_host || "acecloud";
+    }
+  } catch (e) {}
+  renderSites();
+}
+
+/* legacy name kept for the inline onclick in the config flow */
 function openSite(id) {
   const s = SITES.find(x => x.id === id);
   if (!s) return;
@@ -259,4 +298,4 @@ async function activate(id) {
   loadAccounts();
 }
 
-renderSites();
+boot();

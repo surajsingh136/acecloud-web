@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudWeb - Setup guide</title>
+<link rel="stylesheet" href="/help.css">
+</head>
+<body>
+<header>
+  <img src="/logo.svg" alt="CloudWeb">
+  <div>
+    <h1>Setup guide</h1>
+    <div class="sub">How to add your cloud accounts in a few clicks</div>
+  </div>
+  <div class="spacer"></div>
+  <a class="home" href="/">Back to app</a>
+</header>
+
+<main>
+  <div class="panel">
+    <h2>Getting <span>started</span></h2>
+    <p class="lead">Follow these steps once. After that you can create machines from any cloud on the hub.</p>
+    <div class="steps">
+      <div class="step">
+        <h3>Open the hub</h3>
+        <p>After signing in, your default screen opens. Click <span class="arrow">&rarr;</span>
+           <b>the site card</b> for the cloud you want (AceCloud, Hostzop, ExCloud or Gcore).</p>
+      </div>
+      <div class="step">
+        <h3>Add an account</h3>
+        <p>Inside a site click <b>Configure</b>, then fill the <b>API key / login</b> fields and press
+           <b>Save account</b>. Press <b>Use</b> to make it the active account.</p>
+      </div>
+      <div class="step">
+        <h3>Create a machine</h3>
+        <p>Set the <b>Hours</b> box to auto-delete later (or leave 0 to keep it). Click <b>Create</b>.
+           A live <b>Time left</b> countdown appears next to every machine.</p>
+      </div>
+      <div class="step">
+        <h3>Copy details</h3>
+        <p>Just <b>click any IP, proxy or password</b> in the table to copy it. No buttons needed.</p>
+      </div>
+      <div class="step">
+        <h3>Pick your default home screen</h3>
+        <p>On the hub, press <b>Set as default</b> on any card. Next time <code>/</code> opens, that cloud
+           loads first. You can change it any time.</p>
+      </div>
+    </div>
+    <div class="tip">Tip: every user only sees their own accounts. Your keys are never shown to other users.</div>
+  </div>
+
+  <div class="panel">
+    <h2>Where to find your <span>keys / IDs</span></h2>
+    <p class="lead">Each cloud gives you credentials on its own dashboard. Copy them into the matching fields.</p>
+
+    <div class="provider">
+      <h3>AceCloud (Windows Spot &amp; Linux proxy)</h3>
+      <div class="row"><span class="lbl">Email / Password</span><span>Your AceCloud login. Then press <b>Detect</b> to auto-fill project &amp; networks <span class="arrow">&rarr;</span></span></div>
+      <div class="row"><span class="lbl">Project ID</span><span>Auto-filled by Detect. Manual spot: Cloud <span class="arrow">&rarr;</span> Projects <span class="arrow">&rarr;</span> copy the <span class="k">Project ID</span></span></div>
+      <div class="row"><span class="lbl">Network ID</span><span>Networks <span class="arrow">&rarr;</span> pick the external network for Mumbai / Noida</span></div>
+    </div>
+
+    <div class="provider">
+      <h3>Hostzop</h3>
+      <div class="row"><span class="lbl">API key</span><span>Dashboard <span class="arrow">&rarr;</span> API / Settings <span class="arrow">&rarr;</span> copy <span class="k">API key</span></span></div>
+      <div class="row"><span class="lbl">Billing account ID</span><span>(Optional) Billing page <span class="arrow">&rarr;</span> account ID</span></div>
+      <div class="row"><span class="lbl">Location</span><span>e.g. <span class="k">chn01</span> (Chennai)</span></div>
+    </div>
+
+    <div class="provider">
+      <h3>ExCloud</h3>
+      <div class="row"><span class="lbl">API key</span><span>IAM / Console <span class="arrow">&rarr;</span> API keys <span class="arrow">&rarr;</span> copy <span class="k">sk-excloud-...</span></span></div>
+      <div class="row"><span class="lbl">Zone / Subnet ID</span><span>Optional. Leave blank to auto-detect.</span></div>
+    </div>
+
+    <div class="provider">
+      <h3>Gcore</h3>
+      <div class="row"><span class="lbl">API key</span><span>Gcore account <span class="arrow">&rarr;</span> API tokens <span class="arrow">&rarr;</span> create a token with Cloud access</span></div>
+      <div class="row"><span class="lbl">Project ID</span><span>Optional. Auto-detected from your account.</span></div>
+      <div class="row"><span class="lbl">Region ID</span><span>Optional. Default <span class="k">108</span> (Mumbai).</span></div>
+    </div>
+
+    <div class="tip">New here? Create an account on the sign-in page; the admin will approve it, then you can add your own clouds.</div>
+  </div>
+
+  <div class="foot">CloudWeb &middot; one panel for every cloud</div>
+</main>
+
+<script src="/help.js"></script>
+</body>
+</html>

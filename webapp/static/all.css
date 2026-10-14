@@ -84,6 +84,18 @@ table.acct tr.act{background:#f0f8ff}
 .primary{background:linear-gradient(135deg,var(--brand),var(--brand2));border:0;color:#fff}
 .err{color:var(--err);font-size:13px}
 
+.hint{color:var(--muted);font-size:13.5px;margin:-6px 0 18px}
+.hint b{color:var(--navy)}
+.who{color:var(--navy);font-weight:600;font-size:13.5px;margin-right:8px}
+.card{position:relative}
+.card.isdef{border-color:#9cc8ff;box-shadow:0 10px 26px rgba(31,143,255,.16)}
+.defbadge{position:absolute;top:12px;right:12px;font-size:10px;font-weight:800;letter-spacing:1px;
+  color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));padding:4px 9px;border-radius:999px}
+.card .cbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center}
+.card .cbtn{border:0;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer}
+.card .cbtn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+.card .cbtns .mini{margin-left:0}
+
 .form select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
   font-size:14px;background:#fff;outline:none}
 .form select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(31,143,255,.13)}

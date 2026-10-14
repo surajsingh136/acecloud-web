@@ -44,21 +44,38 @@ STEP 2 - Deploy on Render.com
       EXCLOUD_APIKEY  = (optional) your excloud.in API key (sk-excloud-...)
       GCORE_APIKEY    = (optional) your gcore.com API key
       GCORE_REGION_ID = (optional) your gcore region id (default 108 = Mumbai)
+      ADMIN_PASS      = (optional) /admin password (default 9794743687)
+      GITHUB_TOKEN    = (optional) GitHub PAT -> keeps users/accounts across restarts
+      GITHUB_DATA_REPO= (optional) repo for saved state (default surajsingh136/cloudweb-data)
 4. Let it deploy. You'll get a live URL:
       https://acecloud-web.onrender.com
 
 --------------------------------------------------------
+MULTI-USER  (login, signup, /admin)
+--------------------------------------------------------
+- "/" now shows a login / signup screen. Anyone can sign up, but a new account stays
+  PENDING until you approve it in the admin panel.
+- Admin panel:  https://<your-app>.onrender.com/admin   (password = ADMIN_PASS).
+  Approve / reject / delete users and reset their passwords there.
+- Each user only ever sees their OWN accounts/keys (per-user data folders under
+  spot/udata/<uid>/). The owner (admin) keeps the env-default accounts.
+- After signing in, a user picks a DEFAULT host (AceCloud / Hostzop / ExCloud / Gcore)
+  from the hub (/all); "/" then opens that host automatically.
+- Persistence: Render's free disk is EPHEMERAL. To keep users + accounts across
+  restarts/deploys, create a GitHub repo (e.g. cloudweb-data) and set GITHUB_TOKEN to a
+  fine-grained PAT with "Contents: read & write" on that repo. State is mirrored to
+  state.json on every change. If GITHUB_TOKEN is NOT set, data resets on restart.
+- Master PIN (ACEWEB_PIN) still works as an owner login via the X-Pin header.
+
+--------------------------------------------------------
 HUB  /  MULTI-ACCOUNT  (/all)
 --------------------------------------------------------
-- Open  https://<your-app>.onrender.com/all  for the hub (ACECLOUD logo).
+- Open  https://<your-app>.onrender.com/all  for the hub (requires login).
 - Click the AceCloud card to add/select accounts (label, email, password, optional API key).
 - "Current (default)" account comes from env (ACECLOUD_EMAIL / ACECLOUD_PASSWD) and is
-  read-only - it is never modified.
-- Accounts added in the UI are saved to spot/accounts.json. Render's free disk is
-  ephemeral, so they are lost on restart/redeploy. To keep extra accounts permanently,
-  set the ACECLOUD_ACCOUNTS env var to a JSON list, e.g.:
-      ACECLOUD_ACCOUNTS=[{"label":"Office","email":"a@b.com","password":"pw","api_key":""}]
-- The manager itself stays at  https://<your-app>.onrender.com/  (unchanged).
+  read-only - it is never modified. Only the owner sees this env default.
+- Accounts added in the UI are saved per user. Render's free disk is ephemeral, so set
+  GITHUB_TOKEN (see above) to keep them. Alternatively use the ACECLOUD_ACCOUNTS env var.
 
 --------------------------------------------------------
 HOSTZOP  (/hostzop)

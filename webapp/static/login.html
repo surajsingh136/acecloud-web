@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudWeb - Sign in</title>
+<link rel="stylesheet" href="/login.css">
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div class="logo">
+      <img src="/logo.svg" alt="CloudWeb">
+      <div>
+        <div style="font-size:20px;font-weight:800;letter-spacing:.5px">CLOUDWEB</div>
+        <div style="color:var(--mut);font-size:12.5px">Multi-cloud VM manager</div>
+      </div>
+    </div>
+    <h1>One panel for <span>every cloud</span>.</h1>
+    <p>Run Windows Spot, Linux proxy and RDP machines across all your cloud accounts from a
+       single secure dashboard. Add your own API keys; your data stays private to your account.</p>
+    <div class="feat">
+      <div><span class="dot"></span> AceCloud &middot; Hostzop &middot; ExCloud &middot; Gcore</div>
+      <div><span class="dot"></span> Auto-delete timers with live countdown</div>
+      <div><span class="dot"></span> Click any IP or proxy to copy instantly</div>
+    </div>
+    <div class="badges">
+      <span class="badge">Encrypted passwords</span>
+      <span class="badge">Admin-approved signups</span>
+      <span class="badge">Per-user isolation</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="tabs">
+      <button id="tabIn" class="on" onclick="tab('in')">Sign in</button>
+      <button id="tabUp" onclick="tab('up')">Create account</button>
+    </div>
+
+    <form id="fIn" onsubmit="return doLogin(event)">
+      <div class="field">
+        <label>Email</label>
+        <input id="inEmail" type="email" autocomplete="username" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input id="inPass" type="password" autocomplete="current-password" placeholder="Your password">
+      </div>
+      <button class="btn" id="inBtn" type="submit">Sign in</button>
+      <div class="msg" id="inMsg"></div>
+      <div style="text-align:center;margin-top:14px">
+        <a class="badge" href="/help">Need help? View setup guide &rarr;</a>
+      </div>
+    </form>
+
+    <form id="fUp" style="display:none" onsubmit="return doSignup(event)">
+      <div class="field">
+        <label>Full name</label>
+        <input id="upName" placeholder="John Doe">
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input id="upEmail" type="email" autocomplete="email" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label>Password (min 6 characters)</label>
+        <input id="upPass" type="password" autocomplete="new-password" placeholder="Choose a password">
+      </div>
+      <button class="btn" id="upBtn" type="submit">Create account</button>
+      <div class="msg" id="upMsg"></div>
+      <p style="color:var(--mut);font-size:12.5px;margin:12px 2px 0">
+        New accounts need admin approval before you can sign in.</p>
+    </form>
+  </section>
+</div>
+
+<script src="/login.js"></script>
+</body>
+</html>

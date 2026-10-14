@@ -14,11 +14,16 @@
     <div class="brandsub">All your web tools in one place</div>
   </div>
   <div class="spacer"></div>
-  <a class="home" href="/">Open Manager</a>
+  <span id="whoami" class="who"></span>
+  <a class="home" href="/help">Help</a>
+  <a class="home" id="adminLink" href="/admin" style="display:none">Admin</a>
+  <a class="home" href="#" onclick="logout();return false">Logout</a>
 </header>
 
 <main>
-  <h2 class="sec">Sites</h2>
+  <h2 class="sec">Your clouds</h2>
+  <p class="hint">Click a card to open it. Set one as <b>default</b> to have it open automatically
+     when you sign in.</p>
   <div id="sites" class="grid"></div>
   <button class="addsite" onclick="addPlaceholder()">+ Add website (coming soon)</button>
 </main>

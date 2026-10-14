@@ -34,8 +34,32 @@ import spot_server as sw            # original script - untouched
 import hostzop_core as hz           # new module - hostzop.com web port (own code)
 import excloud_core as ex           # new module - excloud.in web port (own code)
 import gcore_core as gc             # new module - gcore.com web port (own code)
-from deploy_core import (load_plans, save_plan, plan_timer, plan_deadline, fetch_ondemand_price,
-                         users_from_txt, FLV_SPEC, REGION_KEYS, EMAIL, PASSWD, CREDS_FILE)
+from deploy_core import (plan_timer, plan_deadline, fetch_ondemand_price,
+                         users_from_txt, FLV_SPEC, REGION_KEYS, EMAIL, PASSWD)
+import store                        # multi-user accounts + sessions + persistence
+
+# ---- per-request user context (ThreadingHTTPServer -> one thread per request) ----
+CUR = threading.local()
+
+
+def cur_uid():
+    return getattr(CUR, "uid", None) or "owner"
+
+
+def set_cur(uid):
+    CUR.uid = uid or "owner"
+
+
+def udir():
+    """The current user's private data directory."""
+    return store.user_dir(cur_uid())
+
+
+def is_owner():
+    try:
+        return cur_uid() == store.owner_uid()
+    except Exception:
+        return True
 
 HOST = os.environ.get("ACEWEB_HOST", "0.0.0.0")
 PORT = int(os.environ.get("ACEWEB_PORT") or os.environ.get("PORT") or "8787")
@@ -45,30 +69,67 @@ MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
         ".js": "application/javascript; charset=utf-8", ".ico": "image/x-icon",
         ".svg": "image/svg+xml"}
 
-STATIC_FILES = {"/": "index.html", "/all": "all.html", "/style.css": "style.css",
+STATIC_FILES = {"/all": "all.html", "/style.css": "style.css",
                 "/app.js": "app.js", "/all.css": "all.css", "/all.js": "all.js",
-                "/logo.svg": "logo.svg", "/hostzop": "hostzop.html",
+                "/logo.svg": "logo.svg", "/index.css": "index.css",
+                "/acecloud": "index.html",
+                "/hostzop": "hostzop.html",
                 "/hostzop.js": "hostzop.js", "/hostzop.css": "hostzop.css",
                 "/hostzop-logo.svg": "hostzop-logo.svg",
                 "/excloud": "excloud.html", "/excloud.js": "excloud.js",
                 "/excloud.css": "excloud.css", "/excloud-logo.svg": "excloud-logo.svg",
                 "/gcore": "gcore.html", "/gcore.js": "gcore.js",
-                "/gcore.css": "gcore.css", "/gcore-logo.svg": "gcore-logo.svg"}
+                "/gcore.css": "gcore.css", "/gcore-logo.svg": "gcore-logo.svg",
+                "/login": "login.html", "/login.js": "login.js", "/login.css": "login.css",
+                "/admin": "admin.html", "/admin.js": "admin.js", "/admin.css": "admin.css",
+                "/help": "help.html", "/help.js": "help.js", "/help.css": "help.css"}
 
-ACCOUNTS_FILE = SPOT_DIR / "accounts.json"
+# AceCloud page is only reachable when it is the user's default host (served at "/").
+HOST_PAGES = {"acecloud": "index.html", "hostzop": "hostzop.html",
+              "excloud": "excloud.html", "gcore": "gcore.html"}
+APP_PAGES = {"/all", "/acecloud", "/hostzop", "/excloud", "/gcore"}
 
-ACCOUNTS_FILE = SPOT_DIR / "accounts.json"
+
+# ============================== per-user prefs (active account per provider) ==============================
+def load_prefs():
+    try:
+        f = udir() / "prefs.json"
+        if f.exists():
+            return json.loads(f.read_text("utf-8")) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def save_prefs(d):
+    try:
+        (udir() / "prefs.json").write_text(json.dumps(d, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def get_pref(kind, default="default"):
+    return (load_prefs().get(kind) or default)
+
+
+def set_pref(kind, val):
+    d = load_prefs()
+    d[kind] = val
+    save_prefs(d)
+
 
 # ============================== auto-delete timers ==============================
-# One timer per provider. Fires ~1 min before the full hour so the bill stays
-# at exactly the set number of hours (never spills into an extra hour).
-TIMER_FILE = SPOT_DIR / "auto_timers.json"
+# One timer per provider, per user. Fires ~1 min before the full hour so the bill
+# stays at exactly the set number of hours (never spills into an extra hour).
+def _timer_file():
+    return udir() / "auto_timers.json"
 
 
 def load_timers():
     try:
-        if TIMER_FILE.exists():
-            d = json.loads(TIMER_FILE.read_text("utf-8"))
+        f = udir() / "auto_timers.json"
+        if f.exists():
+            d = json.loads(f.read_text("utf-8"))
             return d if isinstance(d, list) else []
     except Exception:
         pass
@@ -77,7 +138,8 @@ def load_timers():
 
 def save_timers(lst):
     try:
-        TIMER_FILE.write_text(json.dumps(lst, indent=2), encoding="utf-8")
+        (udir() / "auto_timers.json").write_text(json.dumps(lst, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
@@ -105,30 +167,45 @@ def timer_deadline(kind):
     return None
 
 
+def all_uids():
+    try:
+        return [store.owner_uid()] + [u["id"] for u in store.list_public()]
+    except Exception:
+        return [store.owner_uid()]
+
+
+def _check_timers():
+    now = time.time()
+    lst = load_timers()
+    due = [t for t in lst if (t.get("deadline") or 0) <= now]
+    if not due:
+        return
+    for t in due:
+        kind = t.get("kind")
+        push(f"AUTO-DELETE [{str(kind).upper()}] time up -> deleting...", "warn")
+        try:
+            if kind == "hz" and hz_key():
+                hz.delete_all(hz_key())
+            elif kind == "ex" and ex_key():
+                ex.delete_all(ex_key())
+            elif kind == "gc" and gc_cfg().get("apikey"):
+                gc.delete_all(gc_key(), gc_cfg())
+        except BaseException as e:
+            push(f"AUTO-DELETE [{kind}] error: {e}", "error")
+    save_timers([t for t in lst if (t.get("deadline") or 0) > now])
+    refresh_state()
+    store.sync_now()
+
+
 def timer_loop():
     while True:
         time.sleep(15)
-        try:
-            now = time.time()
-            lst = load_timers()
-            due = [t for t in lst if (t.get("deadline") or 0) <= now]
-            if due:
-                for t in due:
-                    kind = t.get("kind")
-                    push(f"AUTO-DELETE [{str(kind).upper()}] time up -> deleting...", "warn")
-                    try:
-                        if kind == "hz" and hz_key():
-                            hz.delete_all(hz_key())
-                        elif kind == "ex" and ex_key():
-                            ex.delete_all(ex_key())
-                        elif kind == "gc" and gc_cfg().get("apikey"):
-                            gc.delete_all(gc_key(), gc_cfg())
-                    except BaseException as e:
-                        push(f"AUTO-DELETE [{kind}] error: {e}", "error")
-                save_timers([t for t in lst if (t.get("deadline") or 0) > now])
-                refresh_state()
-        except BaseException:
-            pass
+        for uid in all_uids():
+            set_cur(uid)
+            try:
+                _check_timers()
+            except BaseException:
+                pass
 
 
 # ============================== log buffer ==============================
@@ -156,8 +233,28 @@ _hook(gc)
 # ============================== app state ==============================
 BUSY = False
 BUSY_LK = threading.Lock()
-STATE = {"logged": False, "balance": None, "instances": [], "creds": {}}
-ACTIVE_ID = "default"
+STATES = {}     # uid -> {logged, balance, instances, creds}
+
+
+def st(uid=None):
+    return STATES.setdefault(uid or cur_uid(),
+                             {"logged": False, "balance": None, "instances": [], "creds": {}})
+
+
+def spawn(fn, *args):
+    """Run fn in a daemon thread carrying the current user's context."""
+    uid = cur_uid()
+
+    def run():
+        set_cur(uid)
+        try:
+            fn(*args)
+        except BaseException as e:
+            push(f"thread error: {e}", "error")
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return t
 
 
 def begin():
@@ -218,27 +315,34 @@ def size_txt(inst):
             if fname else f"{cpu}vCPU/{ram}GB"), prc
 
 
+def _creds_file():
+    return udir() / "spot_creds.json"
+
+
 def load_creds():
     creds = {}
     try:
-        if CREDS_FILE.exists():
-            creds = json.loads(CREDS_FILE.read_text("utf-8")) or {}
+        f = _creds_file()
+        if f.exists():
+            creds = json.loads(f.read_text("utf-8")) or {}
     except Exception:
         creds = {}
-    for ip, c in users_from_txt().items():
-        creds.setdefault(ip, c)
+    if is_owner():
+        for ip, c in users_from_txt().items():
+            creds.setdefault(ip, c)
     return creds
 
 
 def save_creds(creds):
     try:
-        CREDS_FILE.write_text(json.dumps(creds, indent=2), encoding="utf-8")
+        _creds_file().write_text(json.dumps(creds, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
 
 def proxy_line_for(ip):
-    for f in (SPOT_DIR / ac.PROXY_FILE, SPOT_DIR / "proxy.txt"):
+    for f in (udir() / ac.PROXY_FILE, udir() / "proxy.txt"):
         try:
             for line in f.read_text("utf-8", "replace").splitlines():
                 p = line.split(":")
@@ -277,19 +381,21 @@ def _env_accounts():
 
 def load_accounts():
     accts = []
-    if EMAIL and PASSWD:
+    if is_owner() and EMAIL and PASSWD:
         accts.append({"id": "default", "label": "Current (default)", "email": EMAIL,
                       "password": PASSWD, "api_key": "", "note": "From environment",
                       "source": "env"})
     seen = {a["id"] for a in accts}
-    for a in _env_accounts():
-        if a["id"] in seen:
-            a["id"] = "acc_" + uuid.uuid4().hex[:8]
-        seen.add(a["id"])
-        accts.append(a)
+    if is_owner():
+        for a in _env_accounts():
+            if a["id"] in seen:
+                a["id"] = "acc_" + uuid.uuid4().hex[:8]
+            seen.add(a["id"])
+            accts.append(a)
     try:
-        if ACCOUNTS_FILE.exists():
-            for a in (json.loads(ACCOUNTS_FILE.read_text("utf-8")) or []):
+        f = udir() / "accounts.json"
+        if f.exists():
+            for a in (json.loads(f.read_text("utf-8")) or []):
                 if (isinstance(a, dict) and a.get("email") and a.get("password")
                         and a.get("id") not in seen):
                     a.setdefault("source", "file")
@@ -303,7 +409,8 @@ def load_accounts():
 def save_accounts(accts):
     data = [a for a in accts if a.get("source") == "file"]
     try:
-        ACCOUNTS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        (udir() / "accounts.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
@@ -316,14 +423,15 @@ def find_account(aid):
 
 
 def active_account():
-    return find_account(ACTIVE_ID) or find_account("default")
+    aid = load_prefs().get("ace", "default")
+    return find_account(aid) or find_account("default")
 
 
 # ============================== hostzop (multi-account) ==============================
 # Hostzop uses an API key (no email/password). The default account comes from
-# HOSTZOP_APIKEY env (read-only); extra accounts come from HOSTZOP_ACCOUNTS or the UI.
-HZ_FILE = SPOT_DIR / "hostzop.json"
-HZ_ACTIVE = "default"
+# HOSTZOP_APIKEY env (read-only, owner only); extra accounts come from HOSTZOP_ACCOUNTS or the UI.
+def _hz_file():
+    return udir() / "hostzop.json"
 
 
 def _env_hz():
@@ -354,14 +462,16 @@ def _env_hz():
 
 def load_hz_accounts():
     accts, seen = [], set()
-    for a in _env_hz():
-        if a["id"] in seen:
-            a["id"] = "hz_" + uuid.uuid4().hex[:8]
-        seen.add(a["id"])
-        accts.append(a)
+    if is_owner():
+        for a in _env_hz():
+            if a["id"] in seen:
+                a["id"] = "hz_" + uuid.uuid4().hex[:8]
+            seen.add(a["id"])
+            accts.append(a)
     try:
-        if HZ_FILE.exists():
-            for a in (json.loads(HZ_FILE.read_text("utf-8")) or []):
+        f = _hz_file()
+        if f.exists():
+            for a in (json.loads(f.read_text("utf-8")) or []):
                 if isinstance(a, dict) and a.get("apikey") and a.get("id") not in seen:
                     a.setdefault("source", "file")
                     seen.add(a.get("id"))
@@ -374,7 +484,8 @@ def load_hz_accounts():
 def save_hz_accounts(accts):
     data = [a for a in accts if a.get("source") == "file"]
     try:
-        HZ_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        _hz_file().write_text(json.dumps(data, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
@@ -387,8 +498,9 @@ def find_hz_account(aid):
 
 
 def active_hz():
+    aid = load_prefs().get("hz", "default")
     accts = load_hz_accounts()
-    return (find_hz_account(HZ_ACTIVE)
+    return (find_hz_account(aid)
             or next((a for a in accts if a.get("source") == "env"), None)
             or (accts[0] if accts else None))
 
@@ -441,7 +553,7 @@ def job_hz_create(body):
             push(f"READY {ln}", "ok")
         if lines:
             set_timer("hz", body.get("hours"))
-            out = SPOT_DIR / "hostzop_proxy.txt"
+            out = udir() / "hostzop_proxy.txt"
             with open(out, "a") as f:
                 for ln in lines:
                     f.write(ln + "\n")
@@ -467,14 +579,19 @@ def job_hz_delete(uuids, is_all):
         end()
 
 
-HZ_SNAPS_FILE = SPOT_DIR / "hostzop_snaps.json"
-HZ_PW_FILE = SPOT_DIR / "hostzop_pw.json"
+def _hz_snaps_file():
+    return udir() / "hostzop_snaps.json"
+
+
+def _hz_pw_file():
+    return udir() / "hostzop_pw.json"
 
 
 def load_hz_pw():
     try:
-        if HZ_PW_FILE.exists():
-            data = json.loads(HZ_PW_FILE.read_text("utf-8"))
+        f = _hz_pw_file()
+        if f.exists():
+            data = json.loads(f.read_text("utf-8"))
             return data if isinstance(data, dict) else {}
     except Exception:
         pass
@@ -483,15 +600,17 @@ def load_hz_pw():
 
 def save_hz_pw(m):
     try:
-        HZ_PW_FILE.write_text(json.dumps(m, indent=2), encoding="utf-8")
+        _hz_pw_file().write_text(json.dumps(m, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
 
 def load_hz_snaps():
     try:
-        if HZ_SNAPS_FILE.exists():
-            data = json.loads(HZ_SNAPS_FILE.read_text("utf-8"))
+        f = _hz_snaps_file()
+        if f.exists():
+            data = json.loads(f.read_text("utf-8"))
             return data if isinstance(data, list) else []
     except Exception:
         pass
@@ -500,7 +619,8 @@ def load_hz_snaps():
 
 def save_hz_snaps(snaps):
     try:
-        HZ_SNAPS_FILE.write_text(json.dumps(snaps, indent=2), encoding="utf-8")
+        _hz_snaps_file().write_text(json.dumps(snaps, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
@@ -529,9 +649,9 @@ def job_hz_snapshot(vm_uuid, vm_name, name):
 
 # ============================== ExCloud (excloud.in) ==============================
 # ExCloud uses an API key (sk-excloud-...). The default account comes from the
-# EXCLOUD_APIKEY env (read-only); extra accounts come from EXCLOUD_ACCOUNTS or the UI.
-EX_FILE = SPOT_DIR / "excloud.json"
-EX_ACTIVE = "default"
+# EXCLOUD_APIKEY env (read-only, owner only); extra accounts come from EXCLOUD_ACCOUNTS or the UI.
+def _ex_file():
+    return udir() / "excloud.json"
 
 
 def _env_ex():
@@ -564,14 +684,15 @@ def _env_ex():
 
 def load_ex_accounts():
     accts, seen = [], set()
-    for a in _env_ex():
-        if a["id"] in seen:
-            a["id"] = "ex_" + uuid.uuid4().hex[:8]
-        seen.add(a["id"])
-        accts.append(a)
+    if is_owner():
+        for a in _env_ex():
+            if a["id"] in seen:
+                a["id"] = "ex_" + uuid.uuid4().hex[:8]
+            seen.add(a["id"])
+            accts.append(a)
     try:
-        if EX_FILE.exists():
-            for a in (json.loads(EX_FILE.read_text("utf-8")) or []):
+        if _ex_file().exists():
+            for a in (json.loads(_ex_file().read_text("utf-8")) or []):
                 if isinstance(a, dict) and a.get("apikey") and a.get("id") not in seen:
                     a.setdefault("source", "file")
                     seen.add(a.get("id"))
@@ -584,7 +705,8 @@ def load_ex_accounts():
 def save_ex_accounts(accts):
     data = [a for a in accts if a.get("source") == "file"]
     try:
-        EX_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        _ex_file().write_text(json.dumps(data, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
@@ -598,7 +720,7 @@ def find_ex_account(aid):
 
 def active_ex():
     accts = load_ex_accounts()
-    return (find_ex_account(EX_ACTIVE)
+    return (find_ex_account(load_prefs().get("ex", "default"))
             or next((a for a in accts if a.get("source") == "env"), None)
             or (accts[0] if accts else None))
 
@@ -624,7 +746,7 @@ def job_ex_create(body):
             push(f"READY {ln}", "ok")
         if lines:
             set_timer("ex", body.get("hours"))
-            out = SPOT_DIR / "excloud_proxy.txt"
+            out = udir() / "excloud_proxy.txt"
             with open(out, "a") as f:
                 for ln in lines:
                     f.write(ln + "\n")
@@ -650,13 +772,15 @@ def job_ex_delete(ids, is_all):
         end()
 
 
-EX_SNAPS_FILE = SPOT_DIR / "excloud_snaps.json"
+def _ex_snaps_file():
+    return udir() / "excloud_snaps.json"
 
 
 def load_ex_snaps():
     try:
-        if EX_SNAPS_FILE.exists():
-            data = json.loads(EX_SNAPS_FILE.read_text("utf-8"))
+        f = _ex_snaps_file()
+        if f.exists():
+            data = json.loads(f.read_text("utf-8"))
             return data if isinstance(data, list) else []
     except Exception:
         pass
@@ -665,7 +789,8 @@ def load_ex_snaps():
 
 def save_ex_snaps(snaps):
     try:
-        EX_SNAPS_FILE.write_text(json.dumps(snaps, indent=2), encoding="utf-8")
+        _ex_snaps_file().write_text(json.dumps(snaps, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
@@ -694,9 +819,9 @@ def job_ex_snapshot(vm_id, vm_name, name):
 
 # ============================== Gcore (gcore.com) ==============================
 # Gcore uses an API key. The default account comes from the GCORE_APIKEY env
-# (read-only); extra accounts come from GCORE_ACCOUNTS or the UI.
-GC_FILE = SPOT_DIR / "gcore.json"
-GC_ACTIVE = "default"
+# (read-only, owner only); extra accounts come from GCORE_ACCOUNTS or the UI.
+def _gc_file():
+    return udir() / "gcore.json"
 
 
 def _env_gc():
@@ -727,14 +852,15 @@ def _env_gc():
 
 def load_gc_accounts():
     accts, seen = [], set()
-    for a in _env_gc():
-        if a["id"] in seen:
-            a["id"] = "gc_" + uuid.uuid4().hex[:8]
-        seen.add(a["id"])
-        accts.append(a)
+    if is_owner():
+        for a in _env_gc():
+            if a["id"] in seen:
+                a["id"] = "gc_" + uuid.uuid4().hex[:8]
+            seen.add(a["id"])
+            accts.append(a)
     try:
-        if GC_FILE.exists():
-            for a in (json.loads(GC_FILE.read_text("utf-8")) or []):
+        if _gc_file().exists():
+            for a in (json.loads(_gc_file().read_text("utf-8")) or []):
                 if isinstance(a, dict) and a.get("apikey") and a.get("id") not in seen:
                     a.setdefault("source", "file")
                     seen.add(a.get("id"))
@@ -747,7 +873,8 @@ def load_gc_accounts():
 def save_gc_accounts(accts):
     data = [a for a in accts if a.get("source") == "file"]
     try:
-        GC_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        _gc_file().write_text(json.dumps(data, indent=2), encoding="utf-8")
+        store.sync_now()
     except Exception:
         pass
 
@@ -761,7 +888,7 @@ def find_gc_account(aid):
 
 def active_gc():
     accts = load_gc_accounts()
-    return (find_gc_account(GC_ACTIVE)
+    return (find_gc_account(load_prefs().get("gc", "default"))
             or next((a for a in accts if a.get("source") == "env"), None)
             or (accts[0] if accts else None))
 
@@ -793,7 +920,7 @@ def job_gc_create(body):
             push(f"READY {ln}", "ok")
         if lines:
             set_timer("gc", body.get("hours"))
-            out = SPOT_DIR / "gcore_proxy.txt"
+            out = udir() / "gcore_proxy.txt"
             with open(out, "a") as f:
                 for ln in lines:
                     f.write(ln + "\n")
@@ -919,22 +1046,22 @@ def discover_account():
 def do_login():
     a = active_account()
     if not a:
-        STATE["logged"] = False
+        st()["logged"] = False
         push("No account configured", "error")
         return
     try:
         ac.login(a["email"], a["password"])
         sw.login(a["email"], a["password"])
-        STATE["logged"] = True
+        st()["logged"] = True
         discover_account()
         push(f"CONNECTED: {a['email']} [{a.get('label') or ''}]", "ok")
     except BaseException as e:
-        STATE["logged"] = False
+        st()["logged"] = False
         push(f"Login fail: {e}", "error")
 
 
 def refresh_state():
-    if not STATE["logged"]:
+    if not st()["logged"]:
         return
     try:
         rows = []
@@ -951,9 +1078,9 @@ def refresh_state():
             balance = ((r.json() or {}).get("data") or {}).get("balance")
         except Exception:
             pass
-        STATE["instances"] = rows
-        STATE["balance"] = balance
-        STATE["creds"] = load_creds()
+        st()["instances"] = rows
+        st()["balance"] = balance
+        st()["creds"] = load_creds()
     except BaseException as e:
         push(f"refresh error: {e}", "error")
 
@@ -1098,7 +1225,7 @@ def job_create_proxy(code, size_idx, count, hours, port, user, pwd, billing_lbl)
         save_plan([it["name"] for it in ready], hours)
         for it in ready:
             push(f"PROXY  http://{user}:{pwd}@{it['ip']}:{port}", "ok")
-        pf = SPOT_DIR / ac.PROXY_FILE
+        pf = udir() / ac.PROXY_FILE
         with open(pf, "a") as f:
             for it in ready:
                 f.write(f"{it['ip']}:{port}:{user}:{pwd}\n")
@@ -1134,7 +1261,7 @@ def schedule_timer(hours, kind):
             push(f"Auto nuke error: {e}", "error")
         refresh_state()
 
-    threading.Thread(target=worker, daemon=True).start()
+    spawn(worker)
 
 
 # ============================== DELETE / SNAPSHOT / TEST ==============================
@@ -1240,24 +1367,43 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     # ---------- plumbing ----------
-    def _send(self, body, ctype, code=200):
+    def _send(self, body, ctype, code=200, cookie=None):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        if cookie is not None:
+            self.send_header("Set-Cookie", f"cw_sess={cookie}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600")
         self.end_headers()
         try:
             self.wfile.write(body)
         except Exception:
             pass
 
-    def _json(self, obj, code=200):
-        self._send(json.dumps(obj).encode(), "application/json; charset=utf-8", code)
+    def _json(self, obj, code=200, cookie=None):
+        self._send(json.dumps(obj).encode(), "application/json; charset=utf-8", code, cookie)
+
+    def _cookie(self):
+        for part in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = part.partition("=")
+            if k.strip() == "cw_sess":
+                return unquote(v)
+        return ""
+
+    def _uid(self):
+        q = parse_qs(urlparse(self.path).query)
+        if (self.headers.get("X-Pin") or (q.get("pin") or [""])[0]) == PIN:
+            return store.owner_uid()
+        uid = store.parse_session(self._cookie())
+        if uid and store.get(uid):
+            return uid
+        return None
 
     def _authed(self):
-        q = parse_qs(urlparse(self.path).query)
-        got = self.headers.get("X-Pin") or (q.get("pin") or [""])[0]
-        return got == PIN
+        uid = self._uid()
+        if uid:
+            set_cur(uid)
+        return bool(uid)
 
     def _body(self):
         n = int(self.headers.get("Content-Length") or 0)
@@ -1268,26 +1414,68 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             return {}
 
+    def _serve(self, fname):
+        try:
+            self._send((WEB_DIR / "static" / fname).read_bytes(),
+                       MIME.get(Path(fname).suffix, "application/octet-stream"))
+        except Exception:
+            self._json({"error": "not found"}, 404)
+
     # ---------- GET ----------
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/ping":
-            self._json({"ok": True, "pin": bool(PIN)})
+            self._json({"ok": True, "pin": bool(PIN), "auth": bool(self._uid())})
             return
 
-        # static files - no PIN (let the UI load; data API is protected)
+        # the landing page decides between login and the user's default host
+        if path == "/":
+            uid = self._uid()
+            if not uid:
+                self._serve("login.html")
+                return
+            set_cur(uid)
+            host = store.default_host(uid)
+            self._serve(HOST_PAGES.get(host, "all.html"))
+            return
+
+        # static files - no auth (the UI itself loads; data API is protected)
         fname = STATIC_FILES.get(path)
-        if fname:
-            self._send((WEB_DIR / "static" / fname).read_bytes(),
-                       MIME.get(Path(fname).suffix, "application/octet-stream"))
+        if fname and path not in APP_PAGES:
+            self._serve(fname)
+            return
+
+        if path in APP_PAGES:
+            if not self._authed():
+                self._serve("login.html")
+                return
+            self._serve(STATIC_FILES.get(path, "all.html"))
             return
 
         if not self._authed():
-            self._json({"error": "wrong pin"}, 401)
+            self._json({"error": "login required"}, 401)
+            return
+
+        if path == "/api/me":
+            u = store.get(cur_uid()) or {}
+            self._json({"ok": True, "id": cur_uid(), "email": u.get("email", ""),
+                        "name": u.get("name", ""), "role": u.get("role", "user"),
+                        "status": u.get("status", ""), "default_host": store.default_host(cur_uid())})
+            return
+
+        if path == "/api/admin/users":
+            if not is_owner():
+                self._json({"ok": False, "msg": "Admins only"}, 403)
+                return
+            q = parse_qs(urlparse(self.path).query)
+            if (q.get("pass") or [""])[0] != store.ADMIN_PASS:
+                self._json({"error": "admin password required"}, 401)
+                return
+            self._json({"ok": True, "users": store.list_public()})
             return
 
         if path == "/api/accounts":
-            self._json({"active": ACTIVE_ID, "accounts": [{
+            self._json({"active": load_prefs().get("ace", "default"), "accounts": [{
                 "id": a["id"], "label": a.get("label") or a["email"],
                 "email": a["email"], "has_pass": bool(a.get("password")),
                 "api_key": a.get("api_key") or "", "note": a.get("note") or "",
@@ -1301,7 +1489,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/hostzop/accounts":
-            self._json({"active": HZ_ACTIVE, "accounts": [{
+            self._json({"active": load_prefs().get("hz", "default"), "accounts": [{
                 "id": a["id"], "label": a.get("label") or "Hostzop",
                 "apikey": a.get("apikey") or "", "has_key": bool(a.get("apikey")),
                 "billing_account_id": a.get("billing_account_id") or "",
@@ -1339,7 +1527,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/hostzop/output":
             q = parse_qs(urlparse(self.path).query)
             fn = "windows.txt" if (q.get("file") or ["proxy"])[0] == "windows" else "hostzop_proxy.txt"
-            p = SPOT_DIR / fn
+            p = udir() / fn
             txt = ""
             if p.exists():
                 try:
@@ -1350,7 +1538,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/excloud/accounts":
-            self._json({"active": EX_ACTIVE, "accounts": [{
+            self._json({"active": load_prefs().get("ex", "default"), "accounts": [{
                 "id": a["id"], "label": a.get("label") or "ExCloud",
                 "apikey": a.get("apikey") or "", "has_key": bool(a.get("apikey")),
                 "zone_id": a.get("zone_id") or "", "subnet_id": a.get("subnet_id") or "",
@@ -1376,7 +1564,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/excloud/output":
-            p = SPOT_DIR / "excloud_proxy.txt"
+            p = udir() / "excloud_proxy.txt"
             txt = ""
             if p.exists():
                 try:
@@ -1387,7 +1575,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/gcore/accounts":
-            self._json({"active": GC_ACTIVE, "accounts": [{
+            self._json({"active": load_prefs().get("gc", "default"), "accounts": [{
                 "id": a["id"], "label": a.get("label") or "Gcore",
                 "apikey": a.get("apikey") or "", "has_key": bool(a.get("apikey")),
                 "project_id": a.get("project_id") or "", "region_id": a.get("region_id") or "",
@@ -1411,7 +1599,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/gcore/output":
-            p = SPOT_DIR / "gcore_proxy.txt"
+            p = udir() / "gcore_proxy.txt"
             txt = ""
             if p.exists():
                 try:
@@ -1424,7 +1612,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/state":
             plans = load_plans()
             rows, counts = [], {"spot": 0, "ondemand": 0, "proxy": 0, "active": 0, "total": 0}
-            for rid, rlabel, inst in STATE["instances"]:
+            for rid, rlabel, inst in st()["instances"]:
                 cat = classify(inst)
                 status = str(inst.get("status") or "UNKNOWN").upper()
                 size, prc = size_txt(inst)
@@ -1444,8 +1632,8 @@ class Handler(BaseHTTPRequestHandler):
                     "plan": plan_timer(plans, nm, inst.get("created")),
                     "deadline": plan_deadline(plans, nm, inst.get("created")),
                 })
-            self._json({"logged": STATE["logged"], "busy": BUSY,
-                        "balance": STATE["balance"], "counts": counts, "instances": rows})
+            self._json({"logged": st()["logged"], "busy": BUSY,
+                        "balance": st()["balance"], "counts": counts, "instances": rows})
             return
 
         if path == "/api/logs":
@@ -1484,15 +1672,78 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- POST ----------
     def do_POST(self):
-        global ACTIVE_ID, HZ_ACTIVE, EX_ACTIVE, GC_ACTIVE
-        if not self._authed():
-            self._json({"error": "wrong pin"}, 401)
-            return
         b = self._body()
         path = urlparse(self.path).path
 
+        # ----- public auth routes (no session needed) -----
+        if path == "/api/auth/signup":
+            r = store.register((b.get("email") or "").strip(),
+                               b.get("password") or "", (b.get("name") or "").strip())
+            self._json(r, 200 if r.get("ok") else 400)
+            return
+
+        if path == "/api/auth/login":
+            r = store.login((b.get("email") or "").strip(), b.get("password") or "")
+            if not r.get("ok"):
+                self._json(r, 403 if r.get("status") else 401)
+                return
+            set_cur(r["uid"])
+            self._json({"ok": True, "uid": r["uid"], "role": r["role"]},
+                       cookie=store.make_session(r["uid"]))
+            return
+
+        if path == "/api/auth/logout":
+            self._json({"ok": True}, cookie="")
+            return
+
+        # ----- admin panel (separate password gate, no session needed) -----
+        if path.startswith("/api/admin/"):
+            if (b.get("pass") or "") != store.ADMIN_PASS:
+                self._json({"error": "admin password required"}, 401)
+                return
+            if path == "/api/admin/list":
+                self._json({"ok": True, "users": store.list_public(),
+                            "persist": store.sync_enabled()})
+            elif path == "/api/admin/approve":
+                self._json(store.set_status(b.get("id", ""), "approved"))
+                store.sync_now()
+            elif path == "/api/admin/reject":
+                self._json(store.set_status(b.get("id", ""), "rejected"))
+                store.sync_now()
+            elif path == "/api/admin/delete":
+                self._json(store.delete(b.get("id", "")))
+                store.sync_now()
+            elif path == "/api/admin/pass":
+                self._json(store.set_password(b.get("id", ""), b.get("password") or ""))
+                store.sync_now()
+            else:
+                self._json({"error": "unknown admin action"}, 404)
+            return
+
+        if not self._authed():
+            self._json({"error": "wrong pin"}, 401)
+            return
+
+        if path == "/api/me":
+            u = store.get(cur_uid()) or {}
+            self._json({"ok": True, "id": cur_uid(), "email": u.get("email", ""),
+                        "name": u.get("name", ""), "role": u.get("role", "user"),
+                        "status": u.get("status", ""),
+                        "default_host": store.default_host(cur_uid())})
+            return
+
+        if path == "/api/set-default":
+            host = (b.get("host") or "").strip()
+            if host not in HOST_PAGES:
+                self._json({"ok": False, "msg": "Unknown host"}, 400)
+                return
+            store.set_default_host(cur_uid(), host)
+            store.sync_now()
+            self._json({"ok": True, "host": host})
+            return
+
         if path == "/api/create":
-            if not STATE["logged"]:
+            if not st()["logged"]:
                 self._json({"ok": False, "msg": "Not logged in"}, 400)
                 return
             if not begin():
@@ -1500,18 +1751,18 @@ class Handler(BaseHTTPRequestHandler):
                 return
             t = b.get("type", "Windows Spot")
             if t == "Linux Proxy":
-                threading.Thread(target=job_create_proxy, daemon=True, args=(
-                    REGION_KEYS.get(b.get("region", "Mumbai"), "ap-south-mum-2"),
-                    int(b.get("size_idx", 0)), int(b.get("count", 1)),
-                    int(b.get("hours", 3)), int(b.get("port", 3128)),
-                    b.get("user", "ajay") or "ajay", b.get("pass") or "ajay",
-                    b.get("billing", "SPOT (cheap)"))).start()
+                spawn(job_create_proxy,
+                      REGION_KEYS.get(b.get("region", "Mumbai"), "ap-south-mum-2"),
+                      int(b.get("size_idx", 0)), int(b.get("count", 1)),
+                      int(b.get("hours", 3)), int(b.get("port", 3128)),
+                      b.get("user", "ajay") or "ajay", b.get("pass") or "ajay",
+                      b.get("billing", "SPOT (cheap)"))
             else:
                 billing = "spot" if (b.get("billing") or "").startswith("SPOT") else "hourly"
-                threading.Thread(target=job_create_win, daemon=True, args=(
-                    b.get("region", "Mumbai"), b.get("base", "Windows 2022 (image)"),
-                    int(b.get("size_idx", 0)), int(b.get("count", 1)),
-                    int(b.get("hours", 3)), billing)).start()
+                spawn(job_create_win,
+                      b.get("region", "Mumbai"), b.get("base", "Windows 2022 (image)"),
+                      int(b.get("size_idx", 0)), int(b.get("count", 1)),
+                      int(b.get("hours", 3)), billing)
             self._json({"ok": True})
             return
 
@@ -1519,9 +1770,8 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            items = list(STATE["instances"]) if b.get("all") else b.get("items", [])
-            threading.Thread(target=job_delete, daemon=True,
-                             args=(items, bool(b.get("all")))).start()
+            items = list(st()["instances"]) if b.get("all") else b.get("items", [])
+            spawn(job_delete, items, bool(b.get("all")))
             self._json({"ok": True})
             return
 
@@ -1531,8 +1781,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             name = b.get("name", "")
             snap = (b.get("snap_name") or "").strip() or f"{name[:24]}-snap"
-            threading.Thread(target=job_snapshot, daemon=True,
-                             args=(b.get("region", ""), name, snap)).start()
+            spawn(job_snapshot, b.get("region", ""), name, snap)
             self._json({"ok": True})
             return
 
@@ -1540,8 +1789,7 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_proxy_test, daemon=True,
-                             args=(b.get("line", ""),)).start()
+            spawn(job_proxy_test, b.get("line", ""))
             self._json({"ok": True})
             return
 
@@ -1589,9 +1837,8 @@ class Handler(BaseHTTPRequestHandler):
                 accts.append(rec)
                 save_accounts(accts)
             if b.get("use"):
-                ACTIVE_ID = new_id
-                threading.Thread(target=lambda: (do_login(), refresh_state()),
-                                 daemon=True).start()
+                set_pref("ace", new_id)
+                spawn(lambda: (do_login(), refresh_state()))
             self._json({"ok": True, "id": new_id})
             return
 
@@ -1603,10 +1850,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "msg": "Cannot delete this account"}, 400)
                 return
             save_accounts([a for a in accts if a.get("id") != eid])
-            if ACTIVE_ID == eid:
-                ACTIVE_ID = "default"
-                threading.Thread(target=lambda: (do_login(), refresh_state()),
-                                 daemon=True).start()
+            if load_prefs().get("ace") == eid:
+                set_pref("ace", "default")
+                spawn(lambda: (do_login(), refresh_state()))
             self._json({"ok": True})
             return
 
@@ -1615,8 +1861,8 @@ class Handler(BaseHTTPRequestHandler):
             if not find_account(eid):
                 self._json({"ok": False, "msg": "No such account"}, 400)
                 return
-            ACTIVE_ID = eid
-            threading.Thread(target=lambda: (do_login(), refresh_state()), daemon=True).start()
+            set_pref("ace", eid)
+            spawn(lambda: (do_login(), refresh_state()))
             self._json({"ok": True})
             return
 
@@ -1656,7 +1902,7 @@ class Handler(BaseHTTPRequestHandler):
                               "note": note, "source": "file"})
                 save_hz_accounts(accts)
             if b.get("use"):
-                HZ_ACTIVE = new_id
+                set_pref("hz", new_id)
             self._json({"ok": True, "id": new_id})
             return
 
@@ -1668,8 +1914,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "msg": "Cannot delete this account"}, 400)
                 return
             save_hz_accounts([a for a in accts if a.get("id") != eid])
-            if HZ_ACTIVE == eid:
-                HZ_ACTIVE = "default"
+            if load_prefs().get("hz") == eid:
+                set_pref("hz", "default")
             self._json({"ok": True})
             return
 
@@ -1678,7 +1924,7 @@ class Handler(BaseHTTPRequestHandler):
             if not find_hz_account(eid):
                 self._json({"ok": False, "msg": "No such account"}, 400)
                 return
-            HZ_ACTIVE = eid
+            set_pref("hz", eid)
             self._json({"ok": True})
             return
 
@@ -1689,7 +1935,7 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_hz_create, daemon=True, args=(b,)).start()
+            spawn(job_hz_create, b)
             self._json({"ok": True})
             return
 
@@ -1700,8 +1946,7 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_hz_delete, daemon=True,
-                             args=(b.get("uuids") or [], bool(b.get("all")))).start()
+            spawn(job_hz_delete, b.get("uuids") or [], bool(b.get("all")))
             self._json({"ok": True})
             return
 
@@ -1720,9 +1965,8 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_hz_snapshot, daemon=True,
-                             args=(vm_uuid, (b.get("vm_name") or "").strip(),
-                                   (b.get("name") or "").strip())).start()
+            spawn(job_hz_snapshot, vm_uuid, (b.get("vm_name") or "").strip(),
+                  (b.get("name") or "").strip())
             self._json({"ok": True})
             return
 
@@ -1773,8 +2017,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "msg": "Cannot delete this account"}, 400)
                 return
             save_ex_accounts([a for a in accts if a.get("id") != eid])
-            if EX_ACTIVE == eid:
-                EX_ACTIVE = "default"
+            if load_prefs().get("ex") == eid:
+                set_pref("ex", "default")
             self._json({"ok": True})
             return
 
@@ -1783,7 +2027,7 @@ class Handler(BaseHTTPRequestHandler):
             if not find_ex_account(eid):
                 self._json({"ok": False, "msg": "No such account"}, 400)
                 return
-            EX_ACTIVE = eid
+            set_pref("ex", eid)
             self._json({"ok": True})
             return
 
@@ -1794,7 +2038,7 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_ex_create, daemon=True, args=(b,)).start()
+            spawn(job_ex_create, b)
             self._json({"ok": True})
             return
 
@@ -1805,8 +2049,7 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_ex_delete, daemon=True,
-                             args=(b.get("ids") or [], bool(b.get("all")))).start()
+            spawn(job_ex_delete, b.get("ids") or [], bool(b.get("all")))
             self._json({"ok": True})
             return
 
@@ -1825,9 +2068,8 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_ex_snapshot, daemon=True,
-                             args=(vm_id, (b.get("vm_name") or "").strip(),
-                                   (b.get("name") or "").strip())).start()
+            spawn(job_ex_snapshot, vm_id, (b.get("vm_name") or "").strip(),
+                  (b.get("name") or "").strip())
             self._json({"ok": True})
             return
 
@@ -1863,7 +2105,7 @@ class Handler(BaseHTTPRequestHandler):
                               "source": "file"})
                 save_gc_accounts(accts)
             if b.get("use"):
-                GC_ACTIVE = new_id
+                set_pref("gc", new_id)
             self._json({"ok": True, "id": new_id})
             return
 
@@ -1875,8 +2117,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "msg": "Cannot delete this account"}, 400)
                 return
             save_gc_accounts([a for a in accts if a.get("id") != eid])
-            if GC_ACTIVE == eid:
-                GC_ACTIVE = "default"
+            if load_prefs().get("gc") == eid:
+                set_pref("gc", "default")
             self._json({"ok": True})
             return
 
@@ -1885,7 +2127,7 @@ class Handler(BaseHTTPRequestHandler):
             if not find_gc_account(eid):
                 self._json({"ok": False, "msg": "No such account"}, 400)
                 return
-            GC_ACTIVE = eid
+            set_pref("gc", eid)
             self._json({"ok": True})
             return
 
@@ -1900,7 +2142,7 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_gc_create, daemon=True, args=(b,)).start()
+            spawn(job_gc_create, b)
             self._json({"ok": True})
             return
 
@@ -1911,8 +2153,7 @@ class Handler(BaseHTTPRequestHandler):
             if not begin():
                 self._json({"ok": False, "msg": "Busy..."}, 409)
                 return
-            threading.Thread(target=job_gc_delete, daemon=True,
-                             args=(b.get("ids") or [], bool(b.get("all")))).start()
+            spawn(job_gc_delete, b.get("ids") or [], bool(b.get("all")))
             self._json({"ok": True})
             return
 
@@ -1921,12 +2162,12 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/login":
-            threading.Thread(target=lambda: (do_login(), refresh_state()), daemon=True).start()
+            spawn(lambda: (do_login(), refresh_state()))
             self._json({"ok": True})
             return
 
         if path == "/api/refresh":
-            threading.Thread(target=refresh_state, daemon=True).start()
+            spawn(refresh_state)
             self._json({"ok": True})
             return
 
@@ -1934,17 +2175,25 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    push("AceCloud Web Manager v2 starting...", "sys")
-    threading.Thread(target=lambda: (do_login(), refresh_state()), daemon=True).start()
+    push("CloudWeb Web Manager v2 starting...", "sys")
+    try:
+        owner = store.boot()
+        set_cur(owner)
+        push(f"Store ready (persist={'github' if store.sync_enabled() else 'local'}), "
+             f"{len(store.list_public())} user(s)", "sys")
+    except BaseException as e:
+        push(f"store boot error: {e}", "error")
+    set_cur(store.owner_uid())
+    spawn(lambda: (do_login(), refresh_state()))
     threading.Thread(target=timer_loop, daemon=True).start()
     print("\n" + "=" * 58)
-    print("  AceCloud Web Manager v2")
+    print("  CloudWeb Web Manager v2")
     print(f"  LOCAL :  http://127.0.0.1:{PORT}")
-    print(f"  HUB   :  http://127.0.0.1:{PORT}/all")
-    print(f"  PIN   :  {PIN}   (asked once per browser/phone)")
-    print("  Need a public URL? Run tunnel.bat (free Cloudflare)")
+    print(f"  LOGIN :  http://127.0.0.1:{PORT}/")
+    print(f"  ADMIN :  http://127.0.0.1:{PORT}/admin   (password: {store.ADMIN_PASS})")
+    print(f"  MASTER PIN:  {PIN}")
     print("=" * 58 + "\n")
-    push(f"PIN: {PIN}", "sys")
+    push(f"Admin password: {store.ADMIN_PASS}", "sys")
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
 
 

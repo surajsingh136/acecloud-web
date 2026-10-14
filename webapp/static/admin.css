@@ -1,0 +1,40 @@
+:root{
+  --bg:#05070f; --bg2:#0a1024; --card:#0d1428; --line:#1b2b52;
+  --ink:#e8f0ff; --mut:#8ea2c9; --cy:#22d3ee; --bl:#3b82f6; --gr:#22c55e; --rd:#ef4444; --or:#f59e0b;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; min-height:100vh; color:var(--ink); font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;
+  background:radial-gradient(1100px 560px at 12% -10%,#12306b44,transparent 60%),
+             linear-gradient(160deg,var(--bg),var(--bg2)); padding:26px;
+}
+header{display:flex; align-items:center; gap:12px; max-width:1080px; margin:0 auto 20px}
+header img{height:40px}
+header h1{font-size:21px; margin:0}
+header .sub{color:var(--mut); font-size:12.5px}
+.spacer{flex:1}
+a.home,.btn{border:1px solid var(--line); background:#0c1731; color:var(--ink); padding:9px 14px;
+  border-radius:10px; text-decoration:none; font-size:13.5px; cursor:pointer}
+a.home:hover,.btn:hover{border-color:var(--cy)}
+main{max-width:1080px; margin:0 auto}
+.panel{background:linear-gradient(180deg,#0e1730,#0a1024); border:1px solid var(--line); border-radius:16px; padding:20px; margin-bottom:18px; box-shadow:0 20px 50px #0007}
+.gate{max-width:420px; margin:8vh auto}
+.gate input{width:100%; padding:12px 13px; border-radius:10px; border:1px solid var(--line); background:#080f22; color:var(--ink); font-size:15px; margin:12px 0}
+.gate button{width:100%; padding:13px; border:0; border-radius:11px; font-weight:700; font-size:15px; cursor:pointer; background:linear-gradient(90deg,var(--bl),var(--cy)); color:#04121f}
+.stat{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:6px}
+.chip{font-size:12px; color:var(--mut); border:1px solid var(--line); background:#0b142b; padding:5px 10px; border-radius:999px}
+.chip b{color:var(--ink)}
+table{width:100%; border-collapse:collapse; margin-top:8px}
+th,td{text-align:left; padding:11px 10px; border-bottom:1px solid var(--line); font-size:13.5px; vertical-align:middle}
+th{color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.4px}
+.badge{font-size:11.5px; padding:3px 9px; border-radius:999px; font-weight:600}
+.b-pending{background:#3a2c0566; color:#ffd479; border:1px solid #6b5414}
+.b-approved{background:#0a3d2166; color:#7ef0b0; border:1px solid #17643a}
+.b-rejected{background:#4a141466; color:#ff9d9d; border:1px solid #7a2424}
+.b-admin{background:#1e2a5566; color:#9db8ff; border:1px solid #33509c}
+.mini{border:1px solid var(--line); background:#0c1731; color:var(--ink); padding:6px 10px; border-radius:8px; font-size:12.5px; cursor:pointer; margin-right:6px}
+.mini.ok{border-color:var(--gr); color:#a9f5c3}
+.mini.no{border-color:var(--rd); color:#ffb3b3}
+.mini.cy{border-color:var(--cy)}
+.empty{color:var(--mut); padding:18px 4px}
+.toast{position:fixed; bottom:22px; right:22px; background:#0c1731; border:1px solid var(--cy); color:var(--ink); padding:11px 16px; border-radius:10px; display:none; font-size:13.5px; box-shadow:0 10px 30px #0009}

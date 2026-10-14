@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudWeb - Admin</title>
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+<header>
+  <img src="/logo.svg" alt="CloudWeb">
+  <div>
+    <h1>Admin panel</h1>
+    <div class="sub">Approve users &middot; manage accounts</div>
+  </div>
+  <div class="spacer"></div>
+  <a class="home" href="/">Back to app</a>
+</header>
+
+<main>
+  <div id="gate" class="panel gate">
+    <h3 style="margin:0 0 4px">Admin access</h3>
+    <p style="color:var(--mut);font-size:13px;margin:4px 0 0">Enter the admin password to continue.</p>
+    <input id="gatePass" type="password" placeholder="Admin password" onkeydown="if(event.key==='Enter')unlock()">
+    <button onclick="unlock()">Unlock</button>
+    <div id="gateMsg" style="color:#ff9d9d;font-size:13px;margin-top:10px"></div>
+  </div>
+
+  <div id="dash" style="display:none">
+    <div class="panel">
+      <div class="stat">
+        <span class="chip">Persistence: <b id="sPersist">-</b></span>
+        <span class="chip">Total users: <b id="sTotal">0</b></span>
+        <span class="chip">Pending: <b id="sPending">0</b></span>
+        <span class="chip">Approved: <b id="sApproved">0</b></span>
+        <div class="spacer"></div>
+        <button class="mini cy" onclick="load()">Refresh</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3 style="margin:0 0 6px">Users</h3>
+      <div id="list"></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+<script src="/admin.js"></script>
+</body>
+</html>
