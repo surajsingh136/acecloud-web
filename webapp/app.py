@@ -118,6 +118,29 @@ def set_pref(kind, val):
     save_prefs(d)
 
 
+# ============================== per-user instance plans (auto-delete hours) ==============================
+def load_plans():
+    try:
+        f = udir() / "instance_plans.json"
+        if f.exists():
+            return json.loads(f.read_text("utf-8")) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def save_plan(names, hours):
+    try:
+        plans = load_plans()
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        for nm in names:
+            plans[nm] = {"created": now, "hours": int(hours)}
+        (udir() / "instance_plans.json").write_text(json.dumps(plans, indent=2), encoding="utf-8")
+        store.sync_now()
+    except Exception:
+        pass
+
+
 # ============================== auto-delete timers ==============================
 # One timer per provider, per user. Fires ~1 min before the full hour so the bill
 # stays at exactly the set number of hours (never spills into an extra hour).
@@ -2004,7 +2027,7 @@ class Handler(BaseHTTPRequestHandler):
                               "zone_id": zone, "subnet_id": sub, "note": note, "source": "file"})
                 save_ex_accounts(accts)
             if b.get("use"):
-                EX_ACTIVE = new_id
+                set_pref("ex", new_id)
             self._json({"ok": True, "id": new_id})
             return
 
