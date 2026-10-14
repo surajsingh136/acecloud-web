@@ -255,6 +255,8 @@ function copyText(txt, label) {
   navigator.clipboard.writeText(txt).then(() => toast(label + ": " + txt), () => toast("Copy failed"));
 }
 function cpTxt(txt) { if (txt) copyText(txt, "Copied"); }
+function copyIP() { const r = pickRow(); if (!r) { toast("No server"); return; } copyText(r.ip, "Copied IP"); }
+function copyProxy() { const r = pickRow(); if (!r) { toast("No server"); return; } copyText(proxyLine(r), "Copied proxy"); }
 /* live countdown: decreasing time left until auto-delete */
 function fmtCd(ms) {
   if (!ms || ms <= 0) return "-";
@@ -381,6 +383,9 @@ function wire() {
   $("btn_test").addEventListener("click", testProxy);
   $("btn_open").addEventListener("click", openOutput);
   $("btn_refresh").addEventListener("click", loadServers);
+  $("btn_copyip").addEventListener("click", copyIP);
+  $("btn_copyproxy").addEventListener("click", copyProxy);
+  $("btn_copyrdp").addEventListener("click", copyRdpPass);
   $("btn_delsel").addEventListener("click", deleteSelected);
 }
 
