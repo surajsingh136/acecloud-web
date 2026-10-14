@@ -58,19 +58,13 @@ def plan_timer(plans, name, created_api):
             return "plan: -"
         dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
         now = datetime.now(timezone.utc)
+        used = max((now - dt).total_seconds() / 3600.0, 0)
         hours = pl.get("hours")
         if not hours:
-            used = max((now - dt).total_seconds() / 3600.0, 0)
             return f"used {used:.1f}h | end ?"
-        # auto-delete fires ~1 min before the hour block so the bill stays at
-        # exactly the set number of hours (never spills into an extra hour)
-        end = dt + timedelta(seconds=int(float(hours) * 3600) - 60)
-        end_loc = end.strftime("%H:%M")  # UTC; the browser shows local delete ETA too
-        left = int((end - now).total_seconds() // 60)
-        if left <= 0:
-            return f"{int(hours)}h bill | deleting now"
-        h, m = divmod(left, 60)
-        return f"{int(hours)}h bill | del {end_loc}Z | {h}h{m:02d}m left"
+        end = dt + timedelta(hours=float(hours))
+        end_loc = end.astimezone().strftime("%H:%M")
+        return f"{int(hours)}h | used {used:.1f}h | ~{end_loc}"
     except Exception:
         return "plan: -"
 

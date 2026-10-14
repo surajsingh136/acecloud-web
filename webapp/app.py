@@ -1035,20 +1035,16 @@ def job_create_proxy(code, size_idx, count, hours, port, user, pwd, billing_lbl)
 
 
 def schedule_timer(hours, kind):
-    total = int(float(hours) * 3600)
-    wait = max(30, total - 60)  # stop ~1 min before the hour block => bill stays at the set hours
-    eta_local = time.strftime("%I:%M %p", time.localtime(time.time() + wait))
-    push(f"Auto-delete in {hours}h -> DELETE at {eta_local} "
-         f"(1 min before {hours}h, so only {hours}h is billed). Server must keep running.", "warn")
+    push(f"Auto-delete scheduled: {hours}h (server must keep running)", "warn")
 
     def worker():
-        time.sleep(wait)
+        time.sleep(int(float(hours) * 3600))
         push("Auto-delete timer expired. Cleaning up...", "warn")
         try:
             do_login()
             time.sleep(3)
         except BaseException as e:
-            push(f"Auto nuke error: {e}", "error")
+            push(f"Re-login fail: {e}", "warn")
         try:
             if kind == "win":
                 sw.nuke_all(delete_gpo=False)
@@ -1347,16 +1343,14 @@ class Handler(BaseHTTPRequestHandler):
                 counts[cat] = counts.get(cat, 0) + 1
                 if status == "ACTIVE":
                     counts["active"] += 1
-                rate = float(prc) if prc else None
-                pricing = (f"Rs.{rate:.2f}/hr" if rate
+                pricing = (f"Rs.{float(prc):.2f}/hr" if prc
                            else ("hrly" if cat == "proxy" else "auto"))
                 rows.append({
                     "id": inst.get("id", ""), "region": rid, "region_label": rlabel,
                     "status": status, "name": inst.get("name") or "?", "ip": pub_ip(inst),
                     "size": size, "cat": cat,
                     "type": {"spot": "SPOT", "ondemand": "ON-DEMAND", "proxy": "PROXY"}[cat],
-                    "pricing": pricing, "rate": rate,
-                    "daily": round(rate * 24, 2) if rate else None,
+                    "pricing": pricing,
                     "plan": plan_timer(plans, inst.get("name") or "?", inst.get("created")),
                 })
             self._json({"logged": STATE["logged"], "busy": BUSY,

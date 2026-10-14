@@ -155,8 +155,6 @@ table.acct tr.act td{background:#EAF2FA}
 .ok{color:#1a7f37; font-weight:700}
 .bad{color:#c0392b; font-weight:700}
 .ro{color:#8a97a3; font-size:11px}
-td.acts{white-space:nowrap}
-td.acts .mini{margin-right:3px}
 
 @media (max-width:720px){
   .tag{display:none}
