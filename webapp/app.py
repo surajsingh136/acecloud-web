@@ -1428,15 +1428,14 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True, "pin": bool(PIN), "auth": bool(self._uid())})
             return
 
-        # the landing page decides between login and the user's default host
+        # landing page: login for guests, the cloud hub (all four clouds) once signed in
         if path == "/":
             uid = self._uid()
             if not uid:
                 self._serve("login.html")
                 return
             set_cur(uid)
-            host = store.default_host(uid)
-            self._serve(HOST_PAGES.get(host, "all.html"))
+            self._serve("all.html")
             return
 
         # static files - no auth (the UI itself loads; data API is protected)
