@@ -186,7 +186,7 @@ async function loadServers() {
   let d; try { d = await J("/api/excloud/state"); } catch (e) { return; }
   ROWS = d.rows || [];
   if (!ROWS.length) {
-    $("srvBody").innerHTML = '<tr><td colspan="8" class="empty">No servers. Create some above.</td></tr>';
+    $("srvBody").innerHTML = '<tr><td colspan="9" class="empty">No servers. Create some above.</td></tr>';
   } else {
     $("srvBody").innerHTML = ROWS.map((r, i) => `
       <tr data-i="${i}">
@@ -194,6 +194,11 @@ async function loadServers() {
         <td>${esc(r.name)}</td><td>${esc(r.ip || "-")}</td>
         <td>${esc(r.status)}</td><td>${esc(r.os)}</td><td>${esc(r.size)}</td>
         <td>${esc(proxyLine(r) || "-")}</td><td>${esc(r.created)}</td>
+        <td class="acts">
+          <button class="mini" onclick="rowIp(${i})" title="Copy IP">IP</button>
+          <button class="mini" onclick="rowProxy(${i})" title="Copy proxy">Proxy</button>
+          ${r.windows ? `<button class="mini" onclick="rowPass(${i})" title="Copy RDP password">Pass</button>` : ""}
+        </td>
       </tr>`).join("");
   }
   const running = ROWS.filter(r => ["running", "active", "ready"].includes((r.status || "").toLowerCase())).length;
@@ -217,6 +222,13 @@ function copyText(txt, label) {
 }
 function copyIP() { const r = pickRow(); if (!r) { toast("No server"); return; } copyText(r.ip, "Copied IP"); }
 function copyProxy() { const r = pickRow(); if (!r) { toast("No server"); return; } copyText(proxyLine(r), "Copied proxy"); }
+function rowIp(i) { const r = ROWS[i]; if (r && r.ip) copyText(r.ip, "Copied IP"); else toast("No IP"); }
+function rowProxy(i) { const r = ROWS[i]; if (r && r.ip) copyText(proxyLine(r), "Copied proxy"); else toast("No proxy"); }
+function rowPass(i) {
+  const r = ROWS[i]; if (!r) return;
+  const pw = r.root_password || ($("c_root") && $("c_root").value) || "";
+  if (pw) copyText(pw, "Copied RDP password"); else toast("No RDP password");
+}
 async function deleteSelected() {
   const sel = selectedRows();
   if (!sel.length) { toast("Select servers first"); return; }

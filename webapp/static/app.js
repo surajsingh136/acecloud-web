@@ -64,10 +64,19 @@ async function pollState() {
       <td class="st ${esc(r.status)}">&#9679; ${esc(r.status)}</td>
       <td>${esc(r.name)}</td><td>${esc(r.ip)}</td><td>${esc(r.size)}</td>
       <td>${esc(r.region_label)}</td><td class="${esc(r.type)}">${esc(r.type)}</td>
-      <td>${esc(r.pricing)}</td><td>${esc(r.plan)}</td>
-    </tr>`).join("") || `<tr><td colspan="9" style="text-align:center;color:#8a97a3;height:238px;vertical-align:middle">No instances (or not logged in)</td></tr>`;
+      <td>${esc(r.pricing)}</td>
+      <td>${r.daily != null ? "Rs." + r.daily + "/day" : "-"}</td>
+      <td>${esc(r.plan)}</td>
+      <td class="acts" onclick="event.stopPropagation()">
+        <button class="mini" onclick="rowIp(${i})" title="Copy IP">IP</button>
+        <button class="mini" onclick="rowProxy(${i})" title="Copy proxy ip:port:user:pass">Proxy</button>
+        <button class="mini" onclick="rowPass(${i})" title="Copy password">Pass</button>
+      </td>
+    </tr>`).join("") || `<tr><td colspan="11" style="text-align:center;color:#8a97a3;height:238px;vertical-align:middle">No instances (or not logged in)</td></tr>`;
 
   $("stats").textContent = `Servers: ${d.counts.total}   |   SPOT: ${d.counts.spot}   |   ON-DEMAND: ${d.counts.ondemand}   |   PROXY: ${d.counts.proxy}`;
+  const dayTot = ROWS.reduce((s, r) => s + (r.daily || 0), 0);
+  if (dayTot > 0) $("stats").textContent += `   |   Est. Rs.${dayTot.toFixed(2)}/day`;
   const bal = d.balance == null ? "Balance: --" : `Balance: Rs.${(+d.balance).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
   $("bal").textContent = `${bal} | Total: ${d.counts.total} | Active: ${d.counts.active}`;
 }
@@ -135,6 +144,22 @@ function sel1() {
 }
 
 async function copyIP() { const r = sel1(); if (r && r.ip) copyTxt(r.ip, "IP copied"); }
+
+async function rowIp(i) { const r = ROWS[i]; if (r && r.ip) copyTxt(r.ip, "IP copied"); else toast("No IP"); }
+
+async function rowProxy(i) {
+  const r = ROWS[i]; if (!r || !r.ip) { toast("No IP"); return; }
+  const d = await J("/api/proxyline?ip=" + encodeURIComponent(r.ip));
+  if (d.line) copyTxt(d.line, "Proxy copied");
+  else toast("No proxy string found for this IP.");
+}
+
+async function rowPass(i) {
+  const r = ROWS[i]; if (!r || !r.ip) { toast("No IP"); return; }
+  const d = await J("/api/creds?ip=" + encodeURIComponent(r.ip));
+  if (d.pass) copyTxt(d.pass, "Password copied");
+  else toast("No password saved for this row (Linux proxy?).");
+}
 
 async function copyPass() {
   const r = sel1(); if (!r) return;
