@@ -25,6 +25,19 @@ function toast(m) {
 }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
+/* ---------------- busy lock: while a task runs, lock the buttons (same as AceCloud) ---------------- */
+const BUSY_BTNS = ["btn_create", "btn_delall", "btn_test", "btn_delsel"];
+let _busyTimer = null;
+function setBusy(on) { BUSY_BTNS.forEach(id => { const e = $(id); if (e) e.disabled = !!on; }); }
+function watchBusy() {
+  setBusy(true);
+  if (_busyTimer) return;
+  _busyTimer = setInterval(async () => {
+    let d; try { d = await J("/api/gcore/state"); } catch (e) { return; }
+    if (!d.busy) { clearInterval(_busyTimer); _busyTimer = null; setBusy(false); try { await loadServers(); } catch (e) {} }
+  }, 2500);
+}
+
 /* ---------------- modal ---------------- */
 function openModal(title, html) { $("modal-title").textContent = title; $("modal-body").innerHTML = html; $("modal").classList.remove("hidden"); }
 function closeModal() { $("modal").classList.add("hidden"); }
@@ -169,6 +182,7 @@ async function createProxies() {
   body.hours = parseInt(($("c_hours") && $("c_hours").value) || "3", 10);
   let d; try { d = await POST("/api/gcore/create", body); } catch (e) { toast("Failed"); return; }
   toast(d.ok ? "Creating... watch the log" : (d.msg || "Failed"));
+  if (d.ok) watchBusy();
 }
 
 /* ---------------- servers ---------------- */
@@ -178,6 +192,7 @@ function proxyLine(r) {
 }
 async function loadServers() {
   let d; try { d = await J("/api/gcore/state"); } catch (e) { return; }
+  setBusy(!!d.busy);
   ROWS = d.rows || [];
   if (!ROWS.length) {
     $("srvBody").innerHTML = '<tr><td colspan="9" class="empty">No instances. Create some above.</td></tr>';
@@ -234,13 +249,13 @@ async function deleteSelected() {
   if (!confirm("Delete " + sel.length + " instance(s)?")) return;
   const d = await POST("/api/gcore/delete", { ids: sel.map(r => r.vm_id) });
   toast(d.ok ? "Deleting... watch the log" : "Failed");
-  setTimeout(loadServers, 2500);
+  if (d.ok) watchBusy();
 }
 async function deleteAll() {
   if (!confirm("Delete ALL gcore instances across every region?")) return;
   const d = await POST("/api/gcore/delete", { all: true });
   toast(d.ok ? "Deleting all... watch the log" : "Failed");
-  setTimeout(loadServers, 3000);
+  if (d.ok) watchBusy();
 }
 
 /* ---------------- test proxy ---------------- */

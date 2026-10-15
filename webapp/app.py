@@ -1535,6 +1535,7 @@ class Handler(BaseHTTPRequestHandler):
                 c = pw.get(row.get("uuid") or "")
                 if c:
                     row["root_password"] = c.get("root_password", "")
+            hz_st["busy"] = BUSY
             self._json(hz_st)
             return
 
@@ -1578,6 +1579,7 @@ class Handler(BaseHTTPRequestHandler):
             dl = timer_deadline("ex")
             for row in ex_st.get("rows", []):
                 row["deadline"] = dl
+            ex_st["busy"] = BUSY
             self._json(ex_st)
             return
 
@@ -1617,6 +1619,7 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(gc_st, dict):
                 for row in gc_st.get("rows", []):
                     row["deadline"] = dl
+                gc_st["busy"] = BUSY
             self._json(gc_st)
             return
 

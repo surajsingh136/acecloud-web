@@ -25,6 +25,19 @@ function toast(m) {
 }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
+/* ---------------- busy lock: while a task runs, lock the buttons (same as AceCloud) ---------------- */
+const BUSY_BTNS = ["btn_create", "btn_delall", "btn_snap", "btn_test", "btn_delsel"];
+let _busyTimer = null;
+function setBusy(on) { BUSY_BTNS.forEach(id => { const e = $(id); if (e) e.disabled = !!on; }); }
+function watchBusy() {
+  setBusy(true);
+  if (_busyTimer) return;
+  _busyTimer = setInterval(async () => {
+    let d; try { d = await J("/api/excloud/state"); } catch (e) { return; }
+    if (!d.busy) { clearInterval(_busyTimer); _busyTimer = null; setBusy(false); try { await loadServers(); } catch (e) {} }
+  }, 2500);
+}
+
 /* ---------------- modal ---------------- */
 function openModal(title, html) {
   $("modal-title").textContent = title;
@@ -173,7 +186,7 @@ async function createServers() {
   if (template) body.template = template;
   body.hours = parseInt(($("c_hours") && $("c_hours").value) || "3", 10);
   let d; try { d = await POST("/api/excloud/create", body); } catch (e) { toast("Failed"); return; }
-  if (d.ok) { toast("Creating... watch the log"); }
+  if (d.ok) { toast("Creating... watch the log"); watchBusy(); }
   else toast(d.msg || "Failed");
 }
 
@@ -184,6 +197,7 @@ function proxyLine(r) {
 }
 async function loadServers() {
   let d; try { d = await J("/api/excloud/state"); } catch (e) { return; }
+  setBusy(!!d.busy);
   ROWS = d.rows || [];
   if (!ROWS.length) {
     $("srvBody").innerHTML = '<tr><td colspan="9" class="empty">No servers. Create some above.</td></tr>';
@@ -240,13 +254,13 @@ async function deleteSelected() {
   if (!confirm("Delete " + sel.length + " server(s)? Bill stops for them.")) return;
   const d = await POST("/api/excloud/delete", { ids: sel.map(r => r.vm_id) });
   toast(d.ok ? "Deleting... watch the log" : "Failed");
-  setTimeout(loadServers, 2500);
+  if (d.ok) watchBusy();
 }
 async function deleteAll() {
   if (!confirm("Delete ALL excloud servers? Bill will become 0.")) return;
   const d = await POST("/api/excloud/delete", { all: true });
   toast(d.ok ? "Deleting all... watch the log" : "Failed");
-  setTimeout(loadServers, 3000);
+  if (d.ok) watchBusy();
 }
 
 /* ---------------- snapshot ---------------- */
@@ -264,6 +278,7 @@ async function takeSnap() {
   closeModal();
   const d = await POST("/api/excloud/snapshot", { vm_id: r.vm_id, vm_name: r.name, name });
   toast(d.ok ? "Snapshot started... watch the log" : (d.msg || "Failed"));
+  if (d.ok) watchBusy();
   setTimeout(loadTemplates, 4000);
 }
 
