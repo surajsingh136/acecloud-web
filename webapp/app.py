@@ -213,6 +213,17 @@ def _check_timers():
                 ex.delete_all(ex_key())
             elif kind == "gc" and gc_cfg().get("apikey"):
                 gc.delete_all(gc_key(), gc_cfg())
+            elif kind in ("win", "proxy"):
+                try:
+                    do_login()
+                    time.sleep(3)
+                except BaseException as e:
+                    push(f"Auto-delete re-login fail: {e}", "warn")
+                if kind == "win":
+                    sw.nuke_all(delete_gpo=False)
+                else:
+                    ac.nuke_all(delete_gpo=False)
+                refresh_state()
         except BaseException as e:
             push(f"AUTO-DELETE [{kind}] error: {e}", "error")
     save_timers([t for t in lst if (t.get("deadline") or 0) > now])
@@ -1262,29 +1273,7 @@ def job_create_proxy(code, size_idx, count, hours, port, user, pwd, billing_lbl)
 
 
 def schedule_timer(hours, kind):
-    wait = max(60, int(float(hours) * 3600) - 60)
-    et = time.strftime("%H:%M", time.localtime(time.time() + wait))
-    push(f"AUTO-DELETE [{kind.upper()}] set: {int(float(hours))}h -> delete ~{et} "
-         f"(1 min before, bill-safe). Server must keep running.", "warn")
-
-    def worker():
-        time.sleep(wait)
-        push("Auto-delete timer expired. Cleaning up...", "warn")
-        try:
-            do_login()
-            time.sleep(3)
-        except BaseException as e:
-            push(f"Re-login fail: {e}", "warn")
-        try:
-            if kind == "win":
-                sw.nuke_all(delete_gpo=False)
-            else:
-                ac.nuke_all(delete_gpo=False)
-        except BaseException as e:
-            push(f"Auto nuke error: {e}", "error")
-        refresh_state()
-
-    spawn(worker)
+    set_timer(kind, hours)
 
 
 # ============================== DELETE / SNAPSHOT / TEST ==============================
